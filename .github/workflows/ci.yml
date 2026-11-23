@@ -42,6 +42,10 @@ jobs:
       - run: npm test
       - run: npm run test:e2e -- --trace off
 
+      - name: Add the x64 Claude Code binary for the Intel dmg
+        if: runner.os == 'macOS'
+        run: node scripts/add-claude-binary.mjs darwin-x64 && node scripts/add-claude-binary.mjs darwin-arm64
+
       - run: npm run ${{ matrix.package }}
 
       - uses: actions/upload-artifact@v4

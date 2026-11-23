@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { AgentId, Permission } from '../../shared/agents';
-import type { Folder, Session } from '../../shared/models';
+import { AGENT_IDS, type AgentId, type Permission } from '../../shared/agents';
+import type { AccountStatus, ModelInfo } from '../../shared/events';
+import type { Folder, Session, SessionStatus } from '../../shared/models';
 import { api } from '../lib/ipc';
 
 interface AppState {
@@ -12,8 +13,17 @@ interface AppState {
   folderId: string | null;
   agent: AgentId;
   renamingId: string | null;
+  lastSessionId: string | null;
+  accounts: Partial<Record<AgentId, AccountStatus>>;
+  models: Partial<Record<AgentId, ModelInfo[]>>;
+  accountsOpen: boolean;
 
   load: () => Promise<void>;
+  refreshAccounts: () => Promise<void>;
+  loadModels: (agent: AgentId) => Promise<void>;
+  setAccountsOpen: (open: boolean) => void;
+  setStatus: (id: string, status: SessionStatus) => void;
+  goBack: () => void;
   open: (id: string | null) => void;
   setAgent: (agent: AgentId) => void;
   chooseFolder: (at?: { x: number; y: number }) => Promise<void>;
@@ -42,6 +52,41 @@ export const useApp = create<AppState>((set, get) => ({
   folderId: null,
   agent: 'claude',
   renamingId: null,
+  lastSessionId: null,
+  accounts: {},
+  models: {},
+  accountsOpen: false,
+
+  refreshAccounts: async () => {
+    const results = await Promise.all(
+      AGENT_IDS.map((agent) => api.agent.status({ agent }).catch(() => null)),
+    );
+    const accounts: Partial<Record<AgentId, AccountStatus>> = {};
+    for (const r of results) if (r) accounts[r.agent] = r;
+    set({ accounts });
+  },
+
+  loadModels: async (agent) => {
+    if (get().models[agent]) return;
+    try {
+      const list = await api.agent.models({ agent });
+      set((s) => ({ models: { ...s.models, [agent]: list } }));
+    } catch {
+      // Not signed in or not available yet; labels fall back to the stored model value.
+    }
+  },
+
+  setAccountsOpen: (accountsOpen) => set({ accountsOpen }),
+
+  setStatus: (id, status) =>
+    set((s) => ({ sessions: s.sessions.map((x) => (x.id === id ? { ...x, status } : x)) })),
+
+  goBack: () => {
+    const { activeId, lastSessionId, sessions } = get();
+    if (activeId) set({ activeId: null, lastSessionId: activeId });
+    else if (lastSessionId && sessions.some((x) => x.id === lastSessionId))
+      set({ activeId: lastSessionId });
+  },
 
   load: async () => {
     const [folders, sessions, settings] = await Promise.all([
@@ -54,7 +99,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ loaded: true, folders, sessions, folderId, agent: settings.lastAgent ?? 'claude' });
   },
 
-  open: (id) => set({ activeId: id }),
+  open: (id) => set((s) => ({ activeId: id, lastSessionId: s.activeId ?? s.lastSessionId })),
 
   setAgent: (agent) => {
     set({ agent });
@@ -80,6 +125,8 @@ export const useApp = create<AppState>((set, get) => ({
     if (!folderId) return null;
     const session = await api.sessions.create({ folderId, agent, ...o });
     set((s) => ({ sessions: [session, ...s.sessions], activeId: session.id }));
+    // Errors (e.g. not signed in) arrive as thread events.
+    void api.agent.send({ sessionId: session.id, text: o.prompt }).catch(() => undefined);
     return session;
   },
 

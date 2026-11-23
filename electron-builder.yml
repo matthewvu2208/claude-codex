@@ -11,12 +11,19 @@ files:
 asar: true
 # Native modules ship N-API prebuilds (ABI-stable across Node and Electron), so no rebuild.
 npmRebuild: false
+# The Claude Code binary must be a real file to run.
+asarUnpack:
+  - node_modules/@anthropic-ai/claude-agent-sdk-*/**
 mac:
   category: public.app-category.developer-tools
   target:
     - target: dmg
       arch: [arm64, x64]
   artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  # Each dmg carries only the Claude Code binary for its own CPU.
+  files:
+    - '!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**'
+    - node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/**
   hardenedRuntime: true
   notarize: false
 dmg:
@@ -26,6 +33,8 @@ win:
     - target: nsis
       arch: [x64]
   artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
+  files:
+    - '!node_modules/@anthropic-ai/claude-agent-sdk-win32-arm64/**'
 nsis:
   oneClick: false
   perMachine: false

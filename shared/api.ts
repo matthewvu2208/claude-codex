@@ -26,6 +26,17 @@ export interface Api {
     events: Invoke<'sessions:events'>;
     menu: Invoke<'sessions:menu'>;
   };
+  readonly agent: {
+    status: Invoke<'agent:status'>;
+    signIn: Invoke<'agent:signIn'>;
+    setApiKey: Invoke<'agent:setApiKey'>;
+    models: Invoke<'agent:models'>;
+    send: Invoke<'agent:send'>;
+    interrupt: Invoke<'agent:interrupt'>;
+    approve: Invoke<'agent:approve'>;
+    /** Batches of events from main; validate with EventBatchSchema before use. */
+    onEvent: (cb: (batch: unknown) => void) => () => void;
+  };
   readonly settings: {
     get: Invoke<'settings:get'>;
     set: Invoke<'settings:set'>;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AccountStatusSchema, ApprovalDecisionSchema, ModelInfoSchema } from './events';
 import {
   AgentIdSchema,
   FolderSchema,
@@ -55,6 +56,29 @@ export const ipcContract = {
   'sessions:menu': {
     input: z.object({ id: IdSchema, at: Point.optional() }),
     output: SessionMenuActionSchema.nullable(),
+  },
+
+  'agent:status': { input: z.object({ agent: AgentIdSchema }), output: AccountStatusSchema },
+  /** Opens the vendor's own sign-in flow in a terminal. */
+  'agent:signIn': { input: z.object({ agent: AgentIdSchema }), output: z.null() },
+  /** Stores (or with null, removes) an API key with safeStorage; never returned to the renderer. */
+  'agent:setApiKey': {
+    input: z.object({ agent: AgentIdSchema, key: z.string().trim().min(10).max(500).nullable() }),
+    output: AccountStatusSchema,
+  },
+  'agent:models': { input: z.object({ agent: AgentIdSchema }), output: z.array(ModelInfoSchema) },
+  'agent:send': {
+    input: z.object({ sessionId: IdSchema, text: z.string().min(1).max(200_000) }),
+    output: z.null(),
+  },
+  'agent:interrupt': { input: z.object({ sessionId: IdSchema }), output: z.null() },
+  'agent:approve': {
+    input: z.object({
+      sessionId: IdSchema,
+      requestId: z.string().min(1).max(200),
+      decision: ApprovalDecisionSchema,
+    }),
+    output: z.null(),
   },
 
   'settings:get': { input: z.undefined(), output: SettingsSchema },

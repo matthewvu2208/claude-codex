@@ -6,6 +6,7 @@ import { createHandlers } from './ipc/handlers';
 import { registerIpc } from './ipc/router';
 import { openDatabase } from './store/db';
 import { createStore, type Store } from './store/repositories';
+import { createRuntime, type Runtime } from './runtime';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -22,6 +23,7 @@ if (userDataOverride) app.setPath('userData', userDataOverride);
 
 let mainWindow: BrowserWindow | null = null;
 let store: Store | null = null;
+let runtime: Runtime | null = null;
 const appUrl = () => mainWindow?.webContents.getURL() ?? '';
 
 function createWindow(): BrowserWindow {
@@ -84,13 +86,26 @@ void app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler(() => false);
 
   store = createStore(openDatabase(join(app.getPath('userData'), 'app.db')));
-  registerIpc(createHandlers(store), appUrl);
+  runtime = createRuntime(store, () => mainWindow);
+  registerIpc(createHandlers(store, runtime.hub, runtime.accounts), appUrl);
 
   mainWindow = createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
   });
+});
+
+let shuttingDown = false;
+app.on('before-quit', (event) => {
+  if (shuttingDown || !runtime) return;
+  // Close agent processes cleanly before the database goes away.
+  event.preventDefault();
+  shuttingDown = true;
+  void runtime.hub
+    .shutdown()
+    .catch(() => undefined)
+    .finally(() => app.quit());
 });
 
 app.on('will-quit', () => {

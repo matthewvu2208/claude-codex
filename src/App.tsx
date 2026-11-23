@@ -1,24 +1,47 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AGENT_IDS, type AgentId } from '../shared/agents';
+import { EventBatchSchema } from '../shared/events';
+import { AccountsDialog } from './components/settings/AccountsDialog';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { SessionView } from './components/thread/SessionView';
+import { SessionMeters, SessionTitle } from './components/titlebar/SessionHeader';
 import { TitleBar } from './components/titlebar/TitleBar';
-import { Welcome } from './components/welcome/Welcome';
-import { fixtureAccounts } from './fixtures/sidebar';
+import { DEFAULT_MODEL, Welcome } from './components/welcome/Welcome';
+import { api } from './lib/ipc';
+import { buildThread } from './lib/thread';
 import { useApp } from './stores/app';
+import { useThreads } from './stores/threads';
 
-const plans = {
-  claude: fixtureAccounts.find((a) => a.agent === 'claude')?.plan ?? null,
-  codex: fixtureAccounts.find((a) => a.agent === 'codex')?.plan ?? null,
-};
+/** Main → renderer events: validate, then route to the thread log and session status. */
+function useAgentEvents() {
+  useEffect(
+    () =>
+      api.agent.onEvent((raw) => {
+        const parsed = EventBatchSchema.safeParse(raw);
+        if (!parsed.success) return;
+        useThreads.getState().ingest(parsed.data);
+        for (const { e } of parsed.data) {
+          if (e.t === 'session.status') useApp.getState().setStatus(e.sessionId, e.status);
+        }
+      }),
+    [],
+  );
+}
 
 export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const s = useApp();
-  const { load } = s;
+  const { load, refreshAccounts, loadModels } = s;
+  useAgentEvents();
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void refreshAccounts();
+    // Sign-in finishes in another app; check again when the window comes back.
+    const onFocus = () => void refreshAccounts();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load, refreshAccounts]);
 
   const tree = useMemo(
     () =>
@@ -32,9 +55,50 @@ export function App() {
   const active = s.sessions.find((x) => x.id === s.activeId) ?? null;
   const folder = s.folders.find((f) => f.id === s.folderId) ?? null;
 
+  const loadThread = useThreads((t) => t.load);
+  const log = useThreads((t) => (active ? t.logs[active.id] : undefined));
+  useEffect(() => {
+    if (active) {
+      void loadThread(active.id);
+      void loadModels(active.agent);
+    }
+  }, [active, loadThread, loadModels]);
+  const thread = useMemo(() => buildThread((log?.envelopes ?? []).map((env) => env.e)), [log]);
+
+  const plans = Object.fromEntries(
+    AGENT_IDS.map((agent) => {
+      const a = s.accounts[agent];
+      return [agent, a?.signedIn ? (a.plan ?? a.method ?? 'Signed in') : null];
+    }),
+  ) as Record<AgentId, string | null>;
+
+  const modelLabel = active
+    ? (s.models[active.agent]?.find((m) => m.value === active.model)?.displayName ??
+      (active.model === DEFAULT_MODEL[active.agent].value
+        ? DEFAULT_MODEL[active.agent].label
+        : active.model) ??
+      'Default model')
+    : '';
+
   return (
     <div className="flex h-full flex-col">
-      <TitleBar sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((o) => !o)} />
+      <TitleBar
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        onBack={s.goBack}
+        canGoBack
+        center={
+          active ? (
+            <SessionTitle
+              key={active.id}
+              session={active}
+              onRename={(title) => void s.rename(active.id, title)}
+              onMenu={(at) => void s.sessionMenu(active.id, at)}
+            />
+          ) : undefined
+        }
+        meters={active ? <SessionMeters usage={thread.usage} /> : undefined}
+      />
       <div className="flex min-h-0 flex-1">
         {sidebarOpen ? (
           <Sidebar
@@ -46,10 +110,12 @@ export function App() {
             onMenu={(id, at) => void s.sessionMenu(id, at)}
             onRename={(id, title) => void s.rename(id, title)}
             onSetRenaming={s.setRenaming}
+            accounts={s.accounts}
+            onOpenSettings={() => s.setAccountsOpen(true)}
           />
         ) : null}
         {active ? (
-          <SessionView key={active.id} session={active} />
+          <SessionView key={active.id} session={active} thread={thread} modelLabel={modelLabel} />
         ) : (
           <Welcome
             plans={plans}
@@ -69,6 +135,13 @@ export function App() {
           />
         )}
       </div>
+      {s.accountsOpen ? (
+        <AccountsDialog
+          accounts={s.accounts}
+          onClose={() => s.setAccountsOpen(false)}
+          onChanged={() => void refreshAccounts()}
+        />
+      ) : null}
     </div>
   );
 }

@@ -17,6 +17,7 @@ export async function launchApp(
   const args = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
   return electron.launch({
     args: ['.', ...args],
-    env: { ...env, ...extraEnv, CLAUDE_CODEX_USER_DATA: userData },
+    // Tests use the scripted agent unless a spec opts into the real one (tests/e2e/real).
+    env: { ...env, CLAUDE_CODEX_FAKE_AGENT: '1', ...extraEnv, CLAUDE_CODEX_USER_DATA: userData },
   });
 }

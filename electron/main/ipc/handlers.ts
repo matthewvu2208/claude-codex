@@ -4,6 +4,8 @@ import { BrowserWindow, clipboard, dialog, Menu, shell, type IpcMainInvokeEvent 
 import type { SessionMenuAction } from '../../../shared/ipc';
 import { titleFromPrompt, type Folder } from '../../../shared/models';
 import type { FolderRow, Store } from '../store/repositories';
+import type { AgentHub } from '../agents/hub';
+import type { AccountsService } from '../services/accounts';
 import type { Handlers } from './router';
 import { SettingsSchema } from '../../../shared/ipc';
 
@@ -25,7 +27,7 @@ function popup(
   });
 }
 
-export function createHandlers(store: Store): Handlers {
+export function createHandlers(store: Store, hub: AgentHub, accounts: AccountsService): Handlers {
   const addFolder = (path: string): Folder => {
     if (!statSync(path).isDirectory()) throw new Error('Not a folder');
     return toFolder(store.folders.upsert(path, basename(path) || path));
@@ -87,8 +89,7 @@ export function createHandlers(store: Store): Handlers {
         effort: input.effort,
         permission: input.permission,
       });
-      // The first message is part of the render log; the agent receives it once it starts (M3).
-      store.events.append(session.id, 'user.message', { text: input.prompt });
+      // The renderer sends the prompt with agent:send, which records it in the render log.
       return session;
     },
 
@@ -121,6 +122,26 @@ export function createHandlers(store: Store): Handlers {
       if (picked === 'reveal') shell.showItemInFolder(session.worktreePath ?? session.cwd);
       if (picked === 'copy-id') clipboard.writeText(session.id);
       return picked;
+    },
+
+    'agent:status': ({ agent }) => accounts.status(agent),
+    'agent:signIn': ({ agent }) => {
+      accounts.signIn(agent);
+      return null;
+    },
+    'agent:setApiKey': ({ agent, key }) => accounts.setApiKey(agent, key),
+    'agent:models': ({ agent }) => hub.adapter(agent).listModels(),
+    'agent:send': async ({ sessionId, text }) => {
+      await hub.send(sessionId, text);
+      return null;
+    },
+    'agent:interrupt': async ({ sessionId }) => {
+      await hub.interrupt(sessionId);
+      return null;
+    },
+    'agent:approve': async ({ sessionId, requestId, decision }) => {
+      await hub.approve(sessionId, requestId, decision);
+      return null;
     },
 
     'settings:get': () => SettingsSchema.parse(store.settings.all()),

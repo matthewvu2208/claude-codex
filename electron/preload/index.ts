@@ -27,6 +27,20 @@ const api: Api = {
     events: invoke('sessions:events'),
     menu: invoke('sessions:menu'),
   },
+  agent: {
+    status: invoke('agent:status'),
+    signIn: invoke('agent:signIn'),
+    setApiKey: invoke('agent:setApiKey'),
+    models: invoke('agent:models'),
+    send: invoke('agent:send'),
+    interrupt: invoke('agent:interrupt'),
+    approve: invoke('agent:approve'),
+    onEvent: (cb: (batch: unknown) => void) => {
+      const listener = (_e: Electron.IpcRendererEvent, batch: unknown) => cb(batch);
+      ipcRenderer.on('agent:event', listener);
+      return () => ipcRenderer.removeListener('agent:event', listener);
+    },
+  },
   settings: {
     get: invoke('settings:get'),
     set: invoke('settings:set'),

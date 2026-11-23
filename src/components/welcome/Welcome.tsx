@@ -14,14 +14,17 @@ interface WelcomeProps {
     agent: AgentId;
     text: string;
     worktree: boolean;
-    model: string;
+    model: string | null;
     effort: string;
     permission: Permission;
   }) => void;
 }
 
 /** Fixture defaults until M5 wires the model list per agent. */
-const DEFAULT_MODEL: Record<AgentId, string> = { claude: 'Opus 5.5', codex: 'Default model' };
+export const DEFAULT_MODEL: Record<AgentId, { value: string | null; label: string }> = {
+  claude: { value: 'opus', label: 'Opus 5.5' },
+  codex: { value: null, label: 'Default model' },
+};
 
 export function Welcome({
   plans,
@@ -32,7 +35,7 @@ export function Welcome({
   onStart,
 }: WelcomeProps) {
   const [permission] = useState<Permission>('ask');
-  const effort = 'Low';
+  const effort = 'low';
 
   return (
     <main className="flex min-w-0 flex-1 flex-col items-center justify-center gap-9 overflow-y-auto px-8 py-14">
@@ -44,11 +47,13 @@ export function Welcome({
         <CommandBox
           folderName={folder?.name ?? null}
           onChooseFolder={onChooseFolder}
-          model={DEFAULT_MODEL[agent]}
-          effort={effort}
+          model={DEFAULT_MODEL[agent].label}
+          effort="Low"
           permission={permission}
           worktreeAvailable={folder?.isGitRepo ?? false}
-          onStart={(t) => onStart({ agent, ...t, model: DEFAULT_MODEL[agent], effort, permission })}
+          onStart={(t) =>
+            onStart({ agent, ...t, model: DEFAULT_MODEL[agent].value, effort, permission })
+          }
         />
         <div className="flex flex-wrap justify-center gap-9 text-[14px] text-muted">
           <span>

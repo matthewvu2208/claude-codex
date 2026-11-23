@@ -35,6 +35,36 @@
   --accent-codex-fill: rgb(123 147 255 / 0.22);
   --shadow-card: 0 18px 48px rgb(0 0 0 / 0.35);
 
+  /* Session view (artboard 2) */
+  --bg-bubble: #22262e; /* User message */
+  --bg-quote: #272b34; /* Quote chip in the composer */
+  --bg-popover: #2a2e38; /* Selection toolbar */
+  --border-popover: #3a404d;
+  --bg-subsession: #1e2230; /* Sub-session card */
+  --border-subsession: #2e3446;
+  --link: #afc0ff;
+  --done-bg: #19362a;
+  --done-text: #84ddb2;
+  --context-fill: #62c554;
+  --attention: #e2a33b; /* Cost dot, waiting approval */
+  --danger: #ee6a5f;
+  --diff-add: #84ddb2;
+  --diff-remove: #f19a93;
+  --rail-bg: #17191e;
+
+  /* Syntax colors (Shiki css-variables theme) */
+  --shiki-foreground: #e8eaee;
+  --shiki-background: transparent;
+  --shiki-token-constant: #f0b36b;
+  --shiki-token-string: #a5d6a7;
+  --shiki-token-string-expression: #a5d6a7;
+  --shiki-token-comment: #868d9a;
+  --shiki-token-keyword: #c3a6ff;
+  --shiki-token-parameter: #e8eaee;
+  --shiki-token-function: #8fb4ff;
+  --shiki-token-punctuation: #9ba1ad;
+  --shiki-token-link: #afc0ff;
+
   /* Layout */
   --titlebar-height: 52px;
   --sidebar-width: 348px;

@@ -7,6 +7,8 @@ export interface SessionNodeInput {
   agent: AgentId;
   title: string;
   updatedAt: number;
+  /** Live state for the row icon: spinner while running, amber dot while an approval waits. */
+  status?: 'idle' | 'running' | 'waiting' | 'error';
 }
 
 export interface SessionNode<T extends SessionNodeInput = SessionNodeInput> {

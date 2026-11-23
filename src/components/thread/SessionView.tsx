@@ -1,37 +1,43 @@
-import { useEffect, useState } from 'react';
-import type { Session, StoredEvent } from '../../../shared/models';
+import { AGENT_LABELS } from '../../../shared/agents';
+import type { Session } from '../../../shared/models';
 import { api } from '../../lib/ipc';
+import type { ThreadState } from '../../lib/thread';
+import { Composer } from './Composer';
+import { Thread } from './Thread';
 
-/** M2 stand-in for the thread: title and the stored render log. The full thread arrives in M3. */
-export function SessionView({ session }: { session: Session }) {
-  const [events, setEvents] = useState<StoredEvent[]>([]);
-  useEffect(() => {
-    let live = true;
-    void api.sessions.events({ id: session.id }).then((e) => live && setEvents(e));
-    return () => {
-      live = false;
-    };
-  }, [session.id]);
+interface SessionViewProps {
+  session: Session;
+  thread: ThreadState;
+  modelLabel: string;
+}
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+export function SessionView({ session, thread, modelLabel }: SessionViewProps) {
+  const agentLabel = AGENT_LABELS[session.agent];
   return (
-    <main className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-12 flex-none items-center border-b border-border-subtle px-6">
-        <h1 className="m-0 truncate text-[14px] font-normal">{session.title}</h1>
-      </header>
-      <div className="flex flex-1 flex-col items-center overflow-y-auto px-8 py-6">
-        <div className="flex w-full max-w-[760px] flex-col gap-4">
-          {events
-            .filter((e) => e.type === 'user.message')
-            .map((e) => (
-              <div
-                key={e.seq}
-                className="self-end rounded-2xl bg-surface px-4 py-2.5 text-[15px] whitespace-pre-wrap"
-              >
-                {(e.payload as { text?: string }).text}
-              </div>
-            ))}
-        </div>
-      </div>
+    <main className="flex min-w-0 flex-1 flex-col" aria-label={session.title}>
+      <Thread
+        items={thread.items}
+        agentLabel={agentLabel}
+        onDecide={(requestId, decision) =>
+          void api.agent.approve({ sessionId: session.id, requestId, decision })
+        }
+        footer={
+          <Composer
+            key={session.id}
+            agentLabel={agentLabel}
+            modelLabel={modelLabel}
+            effortLabel={session.effort ? capitalize(session.effort) : 'Default'}
+            permission={session.permission}
+            running={thread.running}
+            onSend={(text) =>
+              void api.agent.send({ sessionId: session.id, text }).catch(() => undefined)
+            }
+            onStop={() => void api.agent.interrupt({ sessionId: session.id })}
+          />
+        }
+      />
     </main>
   );
 }

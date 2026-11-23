@@ -81,7 +81,7 @@ export function CommandBox({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
-        className="resize-none bg-transparent px-[22px] pt-[18px] pb-1.5 text-[17px] leading-normal text-primary outline-none"
+        className="resize-none bg-transparent px-[22px] pt-[18px] pb-1.5 text-[17px] leading-normal text-primary outline-none focus-visible:outline-none"
       />
       <div className="flex flex-wrap items-center gap-1.5 px-3.5 pt-2 pb-3.5">
         <button

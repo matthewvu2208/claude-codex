@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, Loader2 } from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { AGENT_LABELS } from '../../../shared/agents';
 import { buildSessionTree, flattenTree, type SessionNodeInput } from '../../../shared/sessionTree';
@@ -46,6 +46,35 @@ function RenameInput({
       }}
       className="min-w-0 flex-1 rounded-md border border-border bg-input px-1.5 py-0.5 text-primary outline-none"
     />
+  );
+}
+
+function RowIcon({
+  node,
+}: {
+  node: { session: SessionNodeInput; dotAgent: SessionNodeInput['agent'] | null };
+}) {
+  const { session, dotAgent } = node;
+  if (session.status === 'running') {
+    return (
+      <span
+        className="flex size-[18px] flex-none items-center justify-center text-secondary"
+        data-status="running"
+      >
+        <Loader2 size={15} strokeWidth={2} className="animate-spin" aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <span className="relative flex-none" data-status={session.status ?? 'idle'}>
+      <AgentIcon agent={session.agent} size={18} dot={dotAgent} />
+      {session.status === 'waiting' ? (
+        <span
+          aria-hidden
+          className="absolute -top-[3px] -right-[3px] box-content size-2 rounded-full border-2 border-sidebar bg-attention"
+        />
+      ) : null}
+    </span>
   );
 }
 
@@ -121,9 +150,16 @@ export function SessionTree({
               const isChild = depth > 0;
               const open = !collapsed.has(session.id);
               const active = session.id === activeId;
+              const live =
+                session.status === 'running'
+                  ? ', working'
+                  : session.status === 'waiting'
+                    ? ', needs approval'
+                    : '';
               const label = `${session.title} (${AGENT_LABELS[session.agent]}${
                 dotAgent ? `, with a ${AGENT_LABELS[dotAgent]} sub-session` : ''
-              })`;
+              }${live})`;
+              const icon = <RowIcon node={node} />;
               return (
                 <div
                   key={session.id}
@@ -161,7 +197,7 @@ export function SessionTree({
                         onDone={(t) => onRename?.(session.id, t)}
                         onCancel={() => onCancelRename?.()}
                       />
-                      <AgentIcon agent={session.agent} size={18} dot={dotAgent} />
+                      {icon}
                     </>
                   ) : (
                     <button
@@ -176,7 +212,7 @@ export function SessionTree({
                       onKeyDown={rowKeys(session.id)}
                     >
                       <span className="min-w-0 flex-1 truncate">{session.title}</span>
-                      <AgentIcon agent={session.agent} size={18} dot={dotAgent} />
+                      {icon}
                     </button>
                   )}
                 </div>

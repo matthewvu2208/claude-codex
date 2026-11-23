@@ -1,7 +1,8 @@
 import { Contrast, Plus, Search, Settings } from 'lucide-react';
 import { useState } from 'react';
-import { AGENT_LABELS } from '../../../shared/agents';
-import { fixtureAccounts, fixtureUsage } from '../../fixtures/sidebar';
+import { AGENT_IDS, AGENT_LABELS, type AgentId } from '../../../shared/agents';
+import type { AccountStatus } from '../../../shared/events';
+import { fixtureUsage } from '../../fixtures/sidebar';
 import { shortcut } from '../../lib/platform';
 import { AgentIcon } from '../common/AgentIcon';
 import { Kbd } from '../common/Kbd';
@@ -17,6 +18,8 @@ interface SidebarProps {
   onMenu?: (id: string, at: { x: number; y: number }) => void;
   onRename?: (id: string, title: string) => void;
   onSetRenaming?: (id: string | null) => void;
+  accounts?: Partial<Record<AgentId, AccountStatus>>;
+  onOpenSettings?: () => void;
 }
 
 const footerButton =
@@ -31,7 +34,15 @@ export function Sidebar({
   onMenu,
   onRename,
   onSetRenaming,
+  accounts = {},
+  onOpenSettings,
 }: SidebarProps) {
+  const signedIn = AGENT_IDS.flatMap((agent) => {
+    const a = accounts[agent];
+    return a?.signedIn
+      ? [{ agent, initial: a.initial ?? AGENT_LABELS[agent][0]!, plan: a.plan ?? a.method ?? '' }]
+      : [];
+  });
   const [filter, setFilter] = useState('');
   return (
     <nav
@@ -82,12 +93,12 @@ export function Sidebar({
       <UsageCard usage={fixtureUsage} />
 
       <div className="flex flex-none items-center gap-2 px-1">
-        {fixtureAccounts.map((a) => (
+        {signedIn.map((a) => (
           <span
             key={a.agent}
             role="img"
-            aria-label={`${AGENT_LABELS[a.agent]} account · ${a.plan}`}
-            title={`${AGENT_LABELS[a.agent]} · ${a.plan}`}
+            aria-label={`${AGENT_LABELS[a.agent]} account${a.plan ? ` · ${a.plan}` : ''}`}
+            title={`${AGENT_LABELS[a.agent]}${a.plan ? ` · ${a.plan}` : ''}`}
             className="relative flex size-8 items-center justify-center rounded-full bg-border font-semibold"
           >
             {a.initial}
@@ -105,7 +116,12 @@ export function Sidebar({
         >
           <Contrast size={18} strokeWidth={1.8} aria-hidden />
         </button>
-        <button type="button" className={footerButton} aria-label="Settings">
+        <button
+          type="button"
+          className={footerButton}
+          aria-label="Settings"
+          onClick={onOpenSettings}
+        >
           <Settings size={18} strokeWidth={1.8} aria-hidden />
         </button>
       </div>
