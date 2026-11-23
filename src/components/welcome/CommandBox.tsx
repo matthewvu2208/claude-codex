@@ -3,7 +3,8 @@ import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { PERMISSION_LABELS, type Permission } from '../../../shared/agents';
 
 interface CommandBoxProps {
-  folderName: string;
+  folderName: string | null;
+  onChooseFolder: (at: { x: number; y: number }) => void;
   model: string;
   effort: string;
   permission: Permission;
@@ -15,6 +16,7 @@ const toolButton = 'h-9 rounded-lg px-3 text-[15px] text-row hover:bg-raised';
 
 export function CommandBox({
   folderName,
+  onChooseFolder,
   model,
   effort,
   permission,
@@ -26,8 +28,8 @@ export function CommandBox({
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (!text.trim()) return;
-    onStart({ text, worktree });
+    if (!text.trim() || !folderName) return;
+    onStart({ text, worktree: worktree && worktreeAvailable });
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -46,11 +48,16 @@ export function CommandBox({
       <div className="flex flex-wrap items-center gap-5 border-b border-divider px-[18px] py-3">
         <button
           type="button"
-          aria-label={`Workspace folder: ${folderName}`}
+          aria-label={folderName ? `Workspace folder: ${folderName}` : 'Open folder…'}
+          aria-haspopup="menu"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            onChooseFolder({ x: Math.round(r.left), y: Math.round(r.bottom + 4) });
+          }}
           className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[15px] text-primary hover:bg-raised"
         >
           <Folder size={17} strokeWidth={1.7} className="text-secondary" aria-hidden />
-          {folderName}
+          {folderName ?? 'Open folder…'}
           <ChevronDown size={14} strokeWidth={2} className="text-secondary" aria-hidden />
         </button>
         <label
@@ -59,7 +66,7 @@ export function CommandBox({
         >
           <input
             type="checkbox"
-            checked={worktree}
+            checked={worktree && worktreeAvailable}
             disabled={!worktreeAvailable}
             onChange={(e) => setWorktree(e.target.checked)}
             className="size-[18px] accent-action"
@@ -106,7 +113,9 @@ export function CommandBox({
         <button
           type="submit"
           aria-label="Start session"
-          className="ml-2 flex size-12 items-center justify-center rounded-full bg-action text-on-action hover:brightness-110"
+          disabled={!folderName}
+          title={folderName ? undefined : 'Open a folder first'}
+          className="ml-2 flex size-12 items-center justify-center rounded-full bg-action text-on-action hover:brightness-110 disabled:opacity-50"
         >
           <ArrowUp size={20} strokeWidth={2.2} aria-hidden />
         </button>

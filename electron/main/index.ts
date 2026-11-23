@@ -2,6 +2,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, session, shell } from 'electron';
 import { isAllowedNavigation } from '../../shared/security';
+import { createHandlers } from './ipc/handlers';
+import { registerIpc } from './ipc/router';
+import { openDatabase } from './store/db';
+import { createStore, type Store } from './store/repositories';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -11,6 +15,14 @@ const TITLE_BAR = { background: '#141518', symbol: '#9BA1AD', height: 52 } as co
 
 // Sandbox every renderer. `--no-sandbox` (only for root Linux CI containers) opts out.
 if (!app.commandLine.hasSwitch('no-sandbox')) app.enableSandbox();
+
+// Tests point the app at a throwaway data folder.
+const userDataOverride = process.env['CLAUDE_CODEX_USER_DATA'];
+if (userDataOverride) app.setPath('userData', userDataOverride);
+
+let mainWindow: BrowserWindow | null = null;
+let store: Store | null = null;
+const appUrl = () => mainWindow?.webContents.getURL() ?? '';
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -71,11 +83,19 @@ void app.whenReady().then(() => {
   );
   session.defaultSession.setPermissionCheckHandler(() => false);
 
-  createWindow();
+  store = createStore(openDatabase(join(app.getPath('userData'), 'app.db')));
+  registerIpc(createHandlers(store), appUrl);
+
+  mainWindow = createWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
   });
+});
+
+app.on('will-quit', () => {
+  store?.db.close();
+  store = null;
 });
 
 app.on('window-all-closed', () => {

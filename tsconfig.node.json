@@ -11,6 +11,7 @@
     "vitest.config.ts",
     "playwright.config.ts",
     "eslint.config.js",
-    "tests/unit/**/*.ts"
+    "tests/unit/**/*.ts",
+    "tests/fixtures/**/*.ts"
   ]
 }

@@ -11,14 +11,27 @@ import { UsageCard } from './UsageCard';
 interface SidebarProps {
   folders: TreeFolder[];
   activeId: string | null;
+  renamingId?: string | null;
   onOpen: (id: string) => void;
   onNewSession: () => void;
+  onMenu?: (id: string, at: { x: number; y: number }) => void;
+  onRename?: (id: string, title: string) => void;
+  onSetRenaming?: (id: string | null) => void;
 }
 
 const footerButton =
   'flex size-9 items-center justify-center rounded-lg text-label hover:bg-raised';
 
-export function Sidebar({ folders, activeId, onOpen, onNewSession }: SidebarProps) {
+export function Sidebar({
+  folders,
+  activeId,
+  renamingId,
+  onOpen,
+  onNewSession,
+  onMenu,
+  onRename,
+  onSetRenaming,
+}: SidebarProps) {
   const [filter, setFilter] = useState('');
   return (
     <nav
@@ -46,7 +59,25 @@ export function Sidebar({ folders, activeId, onOpen, onNewSession }: SidebarProp
         />
       </label>
 
-      <SessionTree folders={folders} activeId={activeId} filter={filter} onOpen={onOpen} />
+      {folders.length === 0 ? (
+        <p className="flex-1 px-2 text-[13px] text-muted">No sessions yet</p>
+      ) : (
+        <SessionTree
+          folders={folders}
+          activeId={activeId}
+          filter={filter}
+          renamingId={renamingId ?? null}
+          onOpen={onOpen}
+          {...(onMenu ? { onMenu } : {})}
+          {...(onRename ? { onRename } : {})}
+          {...(onSetRenaming
+            ? {
+                onCancelRename: () => onSetRenaming(null),
+                onStartRename: (id: string) => onSetRenaming(id),
+              }
+            : {})}
+        />
+      )}
 
       <UsageCard usage={fixtureUsage} />
 

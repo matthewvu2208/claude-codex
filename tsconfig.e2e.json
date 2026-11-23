@@ -4,5 +4,11 @@
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["tests/e2e/**/*.ts", "src/env.d.ts"]
+  "include": [
+    "tests/e2e/**/*.ts",
+    "src/env.d.ts",
+    "tests/fixtures/**/*.ts",
+    "electron/main/store/**/*.ts",
+    "shared/**/*.ts"
+  ]
 }

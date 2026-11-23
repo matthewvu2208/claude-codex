@@ -9,6 +9,8 @@ files:
   - out/**
   - package.json
 asar: true
+# Native modules ship N-API prebuilds (ABI-stable across Node and Electron), so no rebuild.
+npmRebuild: false
 mac:
   category: public.app-category.developer-tools
   target:

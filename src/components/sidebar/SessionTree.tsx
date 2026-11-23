@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { AGENT_LABELS } from '../../../shared/agents';
 import { buildSessionTree, flattenTree, type SessionNodeInput } from '../../../shared/sessionTree';
 import { AgentIcon } from '../common/AgentIcon';
@@ -14,10 +14,66 @@ interface SessionTreeProps {
   folders: TreeFolder[];
   activeId: string | null;
   filter: string;
+  renamingId?: string | null;
   onOpen: (id: string) => void;
+  onMenu?: (id: string, at: { x: number; y: number }) => void;
+  onRename?: (id: string, title: string) => void;
+  onCancelRename?: () => void;
+  onStartRename?: (id: string) => void;
 }
 
-export function SessionTree({ folders, activeId, filter, onOpen }: SessionTreeProps) {
+function RenameInput({
+  initial,
+  onDone,
+  onCancel,
+}: {
+  initial: string;
+  onDone: (t: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <input
+      aria-label="Session title"
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onBlur={() => onDone(value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onDone(value);
+        if (e.key === 'Escape') onCancel();
+      }}
+      className="min-w-0 flex-1 rounded-md border border-border bg-input px-1.5 py-0.5 text-primary outline-none"
+    />
+  );
+}
+
+export function SessionTree({
+  folders,
+  activeId,
+  filter,
+  renamingId,
+  onOpen,
+  onMenu,
+  onRename,
+  onCancelRename,
+  onStartRename,
+}: SessionTreeProps) {
+  const rowMenu = (id: string) => (e: MouseEvent) => {
+    e.preventDefault();
+    onMenu?.(id, { x: Math.round(e.clientX), y: Math.round(e.clientY) });
+  };
+  const rowKeys = (id: string) => (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+      e.preventDefault();
+      const r = e.currentTarget.getBoundingClientRect();
+      onMenu?.(id, { x: Math.round(r.left + 24), y: Math.round(r.bottom) });
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      onStartRename?.(id);
+    }
+  };
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const query = filter.trim().toLocaleLowerCase();
@@ -71,6 +127,7 @@ export function SessionTree({ folders, activeId, filter, onOpen }: SessionTreePr
               return (
                 <div
                   key={session.id}
+                  onContextMenu={rowMenu(session.id)}
                   className={`group flex min-h-9 items-center gap-2 rounded-[9px] pr-2.5 text-[14px] ${
                     active ? 'bg-raised text-strong' : 'text-row hover:bg-raised/60'
                   }`}
@@ -97,18 +154,31 @@ export function SessionTree({ folders, activeId, filter, onOpen }: SessionTreePr
                       )}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    role="treeitem"
-                    aria-level={depth + 2}
-                    aria-selected={active}
-                    aria-label={label}
-                    className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-left outline-offset-0"
-                    onClick={() => onOpen(session.id)}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{session.title}</span>
-                    <AgentIcon agent={session.agent} size={18} dot={dotAgent} />
-                  </button>
+                  {renamingId === session.id ? (
+                    <>
+                      <RenameInput
+                        initial={session.title}
+                        onDone={(t) => onRename?.(session.id, t)}
+                        onCancel={() => onCancelRename?.()}
+                      />
+                      <AgentIcon agent={session.agent} size={18} dot={dotAgent} />
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      role="treeitem"
+                      aria-level={depth + 2}
+                      aria-selected={active}
+                      aria-label={label}
+                      data-session-id={session.id}
+                      className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-left outline-offset-0"
+                      onClick={() => onOpen(session.id)}
+                      onKeyDown={rowKeys(session.id)}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{session.title}</span>
+                      <AgentIcon agent={session.agent} size={18} dot={dotAgent} />
+                    </button>
+                  )}
                 </div>
               );
             })}

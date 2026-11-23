@@ -1,11 +1,12 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { seedDesignData } from '../fixtures/seed';
 import { launchApp } from './launch';
 
 let app: ElectronApplication;
 let page: Page;
 
 test.beforeAll(async () => {
-  app = await launchApp();
+  app = await launchApp({ CLAUDE_CODEX_USER_DATA: seedDesignData().userData });
   page = await app.firstWindow();
   await page.getByRole('heading', { name: 'What should we build?' }).waitFor();
 });
@@ -95,7 +96,7 @@ test('every control is reachable by keyboard', async () => {
   ]) {
     expect(
       seen.some((n) => n.startsWith(expected)),
-      `${expected} reachable by Tab`,
+      `${expected} reachable by Tab (saw: ${seen.join(' | ')})`,
     ).toBe(true);
   }
   expect(seen.some((n) => n.startsWith('Commands'))).toBe(true);

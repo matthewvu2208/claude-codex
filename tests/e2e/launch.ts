@@ -1,4 +1,5 @@
 import { _electron as electron, type ElectronApplication } from '@playwright/test';
+import { seedDesignData } from '../fixtures/seed';
 
 /** Launches the built app (out/) with a clean environment. */
 export async function launchApp(

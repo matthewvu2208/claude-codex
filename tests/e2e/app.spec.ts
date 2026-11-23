@@ -55,3 +55,19 @@ test('blocks navigation to remote content', async () => {
   await page.waitForTimeout(500);
   expect(page.url()).toBe(before);
 });
+
+test('main rejects invalid IPC payloads', async () => {
+  const page = await app.firstWindow();
+  const error = await page.evaluate(async () => {
+    const api = (
+      globalThis as unknown as { api: { sessions: { create: (x: unknown) => Promise<unknown> } } }
+    ).api;
+    try {
+      await api.sessions.create({ agent: 'not-an-agent' });
+      return 'accepted';
+    } catch (e) {
+      return String(e);
+    }
+  });
+  expect(error).toContain('Invalid sessions:create payload');
+});

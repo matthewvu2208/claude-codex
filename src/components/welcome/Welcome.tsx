@@ -1,35 +1,54 @@
 import { useState } from 'react';
 import type { AgentId, Permission } from '../../../shared/agents';
+import type { Folder } from '../../../shared/models';
 import { AgentCards } from './AgentCards';
 import { CommandBox } from './CommandBox';
 
 interface WelcomeProps {
   plans: Record<AgentId, string | null>;
-  folderName: string;
-  onStart: (opts: { agent: AgentId; text: string; worktree: boolean }) => void;
+  agent: AgentId;
+  onAgentChange: (agent: AgentId) => void;
+  folder: Folder | null;
+  onChooseFolder: (at: { x: number; y: number }) => void;
+  onStart: (opts: {
+    agent: AgentId;
+    text: string;
+    worktree: boolean;
+    model: string;
+    effort: string;
+    permission: Permission;
+  }) => void;
 }
 
 /** Fixture defaults until M5 wires the model list per agent. */
 const DEFAULT_MODEL: Record<AgentId, string> = { claude: 'Opus 5.5', codex: 'Default model' };
 
-export function Welcome({ plans, folderName, onStart }: WelcomeProps) {
-  const [agent, setAgent] = useState<AgentId>('claude');
+export function Welcome({
+  plans,
+  agent,
+  onAgentChange,
+  folder,
+  onChooseFolder,
+  onStart,
+}: WelcomeProps) {
   const [permission] = useState<Permission>('ask');
+  const effort = 'Low';
 
   return (
     <main className="flex min-w-0 flex-1 flex-col items-center justify-center gap-9 overflow-y-auto px-8 py-14">
       <h1 className="m-0 text-center text-[44px] leading-[1.2] font-semibold">
         What should we build?
       </h1>
-      <AgentCards value={agent} plans={plans} onChange={setAgent} />
+      <AgentCards value={agent} plans={plans} onChange={onAgentChange} />
       <div className="flex w-full max-w-[1080px] flex-col gap-3.5">
         <CommandBox
-          folderName={folderName}
+          folderName={folder?.name ?? null}
+          onChooseFolder={onChooseFolder}
           model={DEFAULT_MODEL[agent]}
-          effort="Low"
+          effort={effort}
           permission={permission}
-          worktreeAvailable
-          onStart={(t) => onStart({ agent, ...t })}
+          worktreeAvailable={folder?.isGitRepo ?? false}
+          onStart={(t) => onStart({ agent, ...t, model: DEFAULT_MODEL[agent], effort, permission })}
         />
         <div className="flex flex-wrap justify-center gap-9 text-[14px] text-muted">
           <span>
