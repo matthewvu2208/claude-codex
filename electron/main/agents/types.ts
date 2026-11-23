@@ -45,5 +45,7 @@ export interface AgentAdapter {
   readUsage(): Promise<UsageSnapshot | null>;
   isRunning(sessionId: string): boolean;
   close(sessionId: string): Promise<void>;
+  /** Stops every session and any agent process (app quit). */
+  closeAll?(): Promise<void>;
   onEvent(cb: (e: AgentEvent) => void): () => void;
 }

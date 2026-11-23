@@ -72,13 +72,20 @@ export function App() {
     }),
   ) as Record<AgentId, string | null>;
 
-  const modelLabel = active
-    ? (s.models[active.agent]?.find((m) => m.value === active.model)?.displayName ??
-      (active.model === DEFAULT_MODEL[active.agent].value
-        ? DEFAULT_MODEL[active.agent].label
-        : active.model) ??
-      'Default model')
-    : '';
+  const modelLabel = (() => {
+    if (!active) return '';
+    const list = s.models[active.agent];
+    if (active.model) {
+      return (
+        list?.find((m) => m.value === active.model)?.displayName ??
+        (active.model === DEFAULT_MODEL[active.agent].value
+          ? DEFAULT_MODEL[active.agent].label
+          : active.model)
+      );
+    }
+    // No model chosen: the agent's default (first in its list).
+    return list?.[0]?.displayName ?? DEFAULT_MODEL[active.agent].label;
+  })();
 
   return (
     <div className="flex h-full flex-col">

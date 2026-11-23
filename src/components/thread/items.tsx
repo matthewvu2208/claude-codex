@@ -73,15 +73,21 @@ const RESOLVED_COPY: Record<ApprovalDecision | 'cancelled', string> = {
   cancelled: 'No longer needed',
 };
 
+/** Added and removed lines in "- old / + new" previews and unified diffs. */
+function diffClass(line: string): string {
+  if (line.startsWith('+++') || line.startsWith('---')) return 'text-muted';
+  if (line.startsWith('+')) return 'text-diff-add';
+  if (line.startsWith('-')) return 'text-diff-remove';
+  if (line.startsWith('@@')) return 'text-muted';
+  return '';
+}
+
 function DetailLines({ detail, diff }: { detail: string; diff: boolean }) {
   if (!diff) return <>{detail}</>;
   return (
     <>
       {detail.split('\n').map((line, i) => (
-        <span
-          key={i}
-          className={`block ${line.startsWith('+ ') ? 'text-diff-add' : line.startsWith('- ') ? 'text-diff-remove' : ''}`}
-        >
+        <span key={i} className={`block ${diffClass(line)}`}>
           {line || ' '}
         </span>
       ))}

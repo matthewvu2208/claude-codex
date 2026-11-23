@@ -86,8 +86,9 @@ function AgentAccount({
         </button>
       </div>
       <p className="m-0 text-[13px] text-muted">
-        Sign-in opens {label}&apos;s own login in a terminal. This app never sees your password or
-        tokens.
+        Sign-in opens {label}&apos;s own login{' '}
+        {agent === 'codex' ? 'in your browser' : 'in a terminal'}. This app never sees your password
+        or tokens.
       </p>
       <form
         className="flex flex-wrap items-center gap-2"
@@ -166,6 +167,7 @@ export function AccountsDialog({ accounts, onClose, onChanged }: AccountsDialogP
       </div>
       <div className="flex flex-col gap-3 p-5">
         <AgentAccount agent="claude" status={accounts.claude} onChanged={onChanged} />
+        <AgentAccount agent="codex" status={accounts.codex} onChanged={onChanged} />
       </div>
     </dialog>
   );

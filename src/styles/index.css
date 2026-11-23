@@ -75,9 +75,12 @@ button {
   cursor: default;
 }
 
-:focus-visible {
-  outline: 2px solid var(--selection);
-  outline-offset: 2px;
+/* In the base layer so utilities (e.g. focus-visible:outline-none) can override it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--selection);
+    outline-offset: 2px;
+  }
 }
 
 input::placeholder,

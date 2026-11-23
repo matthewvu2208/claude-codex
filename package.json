@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
     "build:mac": "npm run build && electron-builder --mac --publish never",
-    "build:win": "npm run build && electron-builder --win --publish never"
+    "build:win": "npm run build && electron-builder --win --publish never",
+    "codex:types": "npx -y @openai/codex@0.171.0 app-server generate-ts --experimental --out electron/main/agents/codex/protocol"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

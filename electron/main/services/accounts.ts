@@ -10,10 +10,9 @@ export const API_KEY_SECRET: Record<AgentId, string> = {
   codex: 'openai-api-key',
 };
 
-export interface SignInTarget {
-  /** Executable and arguments for the vendor's own sign-in flow. */
-  command: () => { command: string; args: string[] } | null;
-}
+/** How each vendor's own sign-in flow starts: a terminal command, or a browser flow. */
+export type SignInTarget =
+  { command: () => { command: string; args: string[] } | null } | { browser: () => Promise<void> };
 
 /** Sign-in state per agent. Sign-in always runs in the vendor's own flow. */
 export class AccountsService {
@@ -45,10 +44,12 @@ export class AccountsService {
     }
   }
 
-  signIn(agent: AgentId): void {
-    const target = this.signInTargets[agent]?.command();
-    if (!target) throw new Error('Sign-in is not available for this agent yet.');
-    openTerminal(target.command, target.args, homedir());
+  async signIn(agent: AgentId): Promise<void> {
+    const target = this.signInTargets[agent];
+    if (target && 'browser' in target) return target.browser();
+    const cmd = target?.command();
+    if (!cmd) throw new Error('Sign-in is not available for this agent yet.');
+    openTerminal(cmd.command, cmd.args, homedir());
   }
 
   async setApiKey(agent: AgentId, key: string | null): Promise<AccountStatus> {

@@ -22,7 +22,13 @@ function cspPlugin(): Plugin {
 export default defineConfig({
   main: {
     build: {
-      rollupOptions: { input: { index: resolve('electron/main/index.ts') } },
+      rollupOptions: {
+        input: {
+          index: resolve('electron/main/index.ts'),
+          // Scripted Codex app-server for end-to-end tests (dev builds only).
+          'fake-codex': resolve('electron/main/fake-codex.ts'),
+        },
+      },
     },
   },
   preload: {

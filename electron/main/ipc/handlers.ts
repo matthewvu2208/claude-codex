@@ -125,8 +125,8 @@ export function createHandlers(store: Store, hub: AgentHub, accounts: AccountsSe
     },
 
     'agent:status': ({ agent }) => accounts.status(agent),
-    'agent:signIn': ({ agent }) => {
-      accounts.signIn(agent);
+    'agent:signIn': async ({ agent }) => {
+      await accounts.signIn(agent);
       return null;
     },
     'agent:setApiKey': ({ agent, key }) => accounts.setApiKey(agent, key),

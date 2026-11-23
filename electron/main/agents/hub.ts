@@ -137,5 +137,6 @@ export class AgentHub {
     this.flush();
     for (const u of this.unsubscribers) u();
     for (const s of this.o.store.sessions.list()) await this.adapterFor(s)?.close(s.id);
+    for (const adapter of Object.values(this.o.adapters)) await adapter?.closeAll?.();
   }
 }

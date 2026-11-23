@@ -7,6 +7,7 @@ directories:
   output: release/${version}
 files:
   - out/**
+  - '!out/main/fake-codex.js' # test-only scripted app-server
   - package.json
 asar: true
 # Native modules ship N-API prebuilds (ABI-stable across Node and Electron), so no rebuild.
