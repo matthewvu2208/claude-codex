@@ -1,0 +1,46 @@
+import js from '@eslint/js';
+import reactHooks from 'eslint-plugin-react-hooks';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+export default tseslint.config(
+  {
+    ignores: ['out/**', 'release/**', 'node_modules/**', 'playwright-report/**', 'test-results/**'],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    files: ['electron/**/*.ts', 'shared/**/*.ts', 'tests/**/*.ts', '*.config.{ts,js}'],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    languageOptions: { globals: globals.browser },
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      // The renderer never imports Node APIs or agent SDKs; that work lives in electron/main.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: ['electron', 'fs', 'path', 'child_process', 'os', 'crypto'],
+          patterns: [
+            { group: ['node:*'], message: 'Node APIs belong in electron/main.' },
+            {
+              group: ['@anthropic-ai/*', '@openai/*'],
+              message: 'Agent SDKs belong in electron/main.',
+            },
+            { group: ['**/electron/**'], message: 'Talk to the main process through window.api.' },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['shared/**/*.ts'],
+    rules: {
+      // shared/ is imported by the renderer too.
+      'no-restricted-imports': ['error', { paths: ['electron'], patterns: ['node:*'] }],
+    },
+  },
+);

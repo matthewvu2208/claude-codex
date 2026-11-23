@@ -1,0 +1,19 @@
+/* Design tokens from docs/PLAN.md › Design reference. The only source of colors and fonts. */
+:root {
+  --bg-sidebar: #141518;
+  --bg-main: #1a1d24;
+  --bg-surface: #20242c;
+  --bg-raised: #262a33;
+  --border: #2c313b;
+  --text-primary: #e8eaee;
+  --text-secondary: #9ba1ad;
+  --text-muted: #868d9a;
+  --accent-claude: #e07a55;
+  --accent-codex: #7b93ff;
+  --accent-action: #c98a3d;
+  --selection: #2f5fc4;
+
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+}

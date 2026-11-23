@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+@theme inline {
+  --color-sidebar: var(--bg-sidebar);
+  --color-main: var(--bg-main);
+  --color-surface: var(--bg-surface);
+  --color-raised: var(--bg-raised);
+  --color-border: var(--border);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-claude: var(--accent-claude);
+  --color-codex: var(--accent-codex);
+  --color-action: var(--accent-action);
+  --color-selection: var(--selection);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-mono);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  color-scheme: dark;
+}
+
+::selection {
+  background: var(--selection);
+}

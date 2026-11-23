@@ -1,0 +1,32 @@
+# App name, icon, signing and notarization are settled in M10.
+appId: dev.claudecodex.app
+productName: Claude Codex
+copyright: Copyright © 2026
+directories:
+  buildResources: build
+  output: release/${version}
+files:
+  - out/**
+  - package.json
+asar: true
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  hardenedRuntime: true
+  notarize: false
+dmg:
+  writeUpdateInfo: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  differentialPackage: false
+publish: null
