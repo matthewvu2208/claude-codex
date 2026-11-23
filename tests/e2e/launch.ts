@@ -1,7 +1,7 @@
 import { _electron as electron, type ElectronApplication } from '@playwright/test';
 import { seedDesignData } from '../fixtures/seed';
 
-/** Launches the built app (out/) with a clean environment. */
+/** Launches the built app (out/) with a clean environment and its own throwaway data folder. */
 export async function launchApp(
   extraEnv: Record<string, string> = {},
 ): Promise<ElectronApplication> {
@@ -11,7 +11,12 @@ export async function launchApp(
     if (value !== undefined && key !== 'NODE_OPTIONS' && key !== 'ELECTRON_RENDERER_URL')
       env[key] = value;
   }
+  // Never touch the developer's real app data.
+  const userData = extraEnv['CLAUDE_CODEX_USER_DATA'] ?? seedDesignData({ empty: true }).userData;
   // Chromium refuses to start its sandbox as root (CI containers only).
   const args = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
-  return electron.launch({ args: ['.', ...args], env: { ...env, ...extraEnv } });
+  return electron.launch({
+    args: ['.', ...args],
+    env: { ...env, ...extraEnv, CLAUDE_CODEX_USER_DATA: userData },
+  });
 }
