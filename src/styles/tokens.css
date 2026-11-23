@@ -1,5 +1,10 @@
-/* Design tokens from docs/PLAN.md › Design reference. The only source of colors and fonts. */
+/*
+ * Design tokens: the only source of colors and fonts.
+ * Core tokens come from docs/PLAN.md › Design reference; the rest are the extra shades the
+ * design canvas uses (artboards 1 and 2), named by role.
+ */
 :root {
+  /* Core (plan) */
   --bg-sidebar: #141518;
   --bg-main: #1a1d24;
   --bg-surface: #20242c;
@@ -13,6 +18,28 @@
   --accent-action: #c98a3d;
   --selection: #2f5fc4;
 
+  /* Canvas shades */
+  --bg-control: #1d2027; /* New session button, usage card */
+  --bg-input: #1a1c21; /* Search field */
+  --bg-card-selected: #22262e; /* Selected agent card */
+  --border-subtle: #23262d; /* Title bar and sidebar edges */
+  --border-card: #2e333d; /* Command box */
+  --border-strong: #4a505c; /* Selected agent card */
+  --divider: #2b3039; /* Command box divider */
+  --tree-line: #3a404b; /* Sub-session connector */
+  --text-strong: #f2f3f5; /* Active row */
+  --text-row: #c9cdd4; /* Session rows, toolbar values */
+  --text-label: #b3b8c2; /* Folder names, usage labels */
+  --text-disabled: #5e6470; /* Disabled toolbar icon */
+  --on-action: #141518; /* Icon on the action button */
+  --accent-codex-fill: rgb(123 147 255 / 0.22);
+  --shadow-card: 0 18px 48px rgb(0 0 0 / 0.35);
+
+  /* Layout */
+  --titlebar-height: 52px;
+  --sidebar-width: 348px;
+
+  /* Type */
   --font-ui:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;

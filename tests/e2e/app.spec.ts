@@ -1,17 +1,10 @@
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
+import { expect, test, type ElectronApplication } from '@playwright/test';
+import { launchApp } from './launch';
 
 let app: ElectronApplication;
 
 test.beforeAll(async () => {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    // Electron rejects some Node options, and the dev server URL would bypass the build.
-    if (value !== undefined && key !== 'NODE_OPTIONS' && key !== 'ELECTRON_RENDERER_URL')
-      env[key] = value;
-  }
-  // Chromium refuses to start its sandbox as root (CI containers only).
-  const args = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
-  app = await electron.launch({ args: ['.', ...args], env });
+  app = await launchApp();
 });
 
 test.afterAll(async () => {
@@ -21,7 +14,7 @@ test.afterAll(async () => {
 test('opens the main window', async () => {
   const page = await app.firstWindow();
   await expect(page).toHaveTitle('Claude Codex');
-  await expect(page.getByText('Scaffold ready')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What should we build?' })).toBeVisible();
 });
 
 test('renderer is isolated from Node', async () => {

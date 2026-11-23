@@ -6,6 +6,9 @@ import { isAllowedNavigation } from '../../shared/security';
 const here = fileURLToPath(new URL('.', import.meta.url));
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
 
+/** Mirrors bg.sidebar, text.secondary and the title bar height in src/styles/tokens.css. */
+const TITLE_BAR = { background: '#141518', symbol: '#9BA1AD', height: 52 } as const;
+
 // Sandbox every renderer. `--no-sandbox` (only for root Linux CI containers) opts out.
 if (!app.commandLine.hasSwitch('no-sandbox')) app.enableSandbox();
 
@@ -13,11 +16,22 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
+    useContentSize: true,
     minWidth: 960,
     minHeight: 600,
     show: false,
-    backgroundColor: '#1A1D24',
+    backgroundColor: TITLE_BAR.background,
     title: 'Claude Codex',
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 20 } }
+      : {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            color: TITLE_BAR.background,
+            symbolColor: TITLE_BAR.symbol,
+            height: TITLE_BAR.height,
+          },
+        }),
     webPreferences: {
       preload: join(here, '../preload/index.cjs'),
       contextIsolation: true,

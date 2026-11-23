@@ -2,20 +2,37 @@
 @import './tokens.css';
 
 @theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
   --color-sidebar: var(--bg-sidebar);
   --color-main: var(--bg-main);
   --color-surface: var(--bg-surface);
   --color-raised: var(--bg-raised);
+  --color-control: var(--bg-control);
+  --color-input: var(--bg-input);
+  --color-card-selected: var(--bg-card-selected);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-card: var(--border-card);
+  --color-border-strong: var(--border-strong);
+  --color-divider: var(--divider);
+  --color-tree-line: var(--tree-line);
   --color-primary: var(--text-primary);
   --color-secondary: var(--text-secondary);
   --color-muted: var(--text-muted);
+  --color-strong: var(--text-strong);
+  --color-row: var(--text-row);
+  --color-label: var(--text-label);
+  --color-disabled: var(--text-disabled);
   --color-claude: var(--accent-claude);
   --color-codex: var(--accent-codex);
+  --color-codex-fill: var(--accent-codex-fill);
   --color-action: var(--accent-action);
+  --color-on-action: var(--on-action);
   --color-selection: var(--selection);
   --font-sans: var(--font-ui);
   --font-mono: var(--font-mono);
+  --shadow-card: var(--shadow-card);
 }
 
 html,
@@ -26,12 +43,37 @@ body,
 
 body {
   margin: 0;
+  overflow: hidden;
   background: var(--bg-main);
   color: var(--text-primary);
   font-family: var(--font-ui);
+  font-size: 14px;
   color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
   background: var(--selection);
+}
+
+button {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--selection);
+  outline-offset: 2px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
 }
