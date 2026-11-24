@@ -26,6 +26,11 @@ function repo() {
   writeFileSync(join(dir, '.gitignore'), 'secret.env\n');
   writeFileSync(join(dir, 'secret.env'), 'K=V\n');
   git(dir, 'init', '-q', '-b', 'main');
+  // Test-only repo config: an identity for the commits the merge makes (CI machines have none),
+  // and no line-ending conversion so file contents compare the same on Windows.
+  git(dir, 'config', 'user.name', 'Test');
+  git(dir, 'config', 'user.email', 'test@example.com');
+  git(dir, 'config', 'core.autocrlf', 'false');
   git(dir, 'add', '-A');
   git(dir, 'commit', '-qm', 'init');
   return dir;
@@ -39,9 +44,6 @@ describe('worktrees', () => {
 
   it('creates, merges and removes a worktree without touching the main checkout until merge', async () => {
     const dir = repo();
-    // Commits in the worktree need an identity; CI machines may not have one.
-    process.env['GIT_AUTHOR_NAME'] = process.env['GIT_COMMITTER_NAME'] = 'T';
-    process.env['GIT_AUTHOR_EMAIL'] = process.env['GIT_COMMITTER_EMAIL'] = 't@example.com';
     const root = mkdtempSync(join(tmpdir(), 'wt-root-'));
     const wt = await createWorktree(dir, root, 'Fix notes');
     expect(wt.branch).toMatch(/^agent\/fix-notes-/);

@@ -1,9 +1,19 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { seedDesignData } from '../fixtures/seed';
 import { launchApp } from './launch';
+
+/**
+ * True when `child` is `parent` or inside it, comparing canonical paths (macOS temp folders are
+ * reported as /private/var/... by git but /var/... by the app) on path boundaries, so
+ * /a/repo-2 is not inside /a/repo.
+ */
+function isInside(child: string, parent: string): boolean {
+  const rel = relative(realpathSync(parent), realpathSync(child));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], {
@@ -24,6 +34,8 @@ test.beforeAll(async () => {
   writeFileSync(join(project, 'notes.txt'), 'status: draft\n');
   writeFileSync(join(project, 'src', 'pricing.ts'), 'export const x = 1;\n');
   git(project, 'init', '-q', '-b', 'main');
+  // Test-only: no line-ending conversion, so file contents compare the same on Windows.
+  git(project, 'config', 'core.autocrlf', 'false');
   git(project, 'add', '-A');
   git(project, 'commit', '-q', '-m', 'init');
 
@@ -161,17 +173,25 @@ test('a worktree session leaves the main checkout untouched', async () => {
   await approval.getByRole('button', { name: 'Allow once' }).click();
   await expect(log.getByText('in notes.txt')).toBeVisible();
 
-  const worktrees = await app.evaluate(({ app: electronApp }) => electronApp.getPath('userData'));
+  const appData = await app.evaluate(({ app: electronApp }) => electronApp.getPath('userData'));
   const list = git(project, 'worktree', 'list', '--porcelain');
-  const wtPath = /worktree (.*worktrees.*)/.exec(list)?.[1];
-  expect(wtPath, list).toBeTruthy();
-  expect(wtPath!.startsWith(join(worktrees, 'worktrees', 'repo'))).toBe(true);
-  expect(readFileSync(join(wtPath!, 'notes.txt'), 'utf8')).toBe('status: final\n');
+  // Every worktree git knows about, other than the main checkout itself.
+  const others = [...list.matchAll(/^worktree (.+)$/gm)]
+    .map((m) => m[1]!.trim())
+    .filter((p) => realpathSync(p) !== realpathSync(project));
+  expect(others, list).toHaveLength(1);
+  const wtPath = others[0]!;
+  // It lives under <appData>/worktrees/<repo>/, and not inside the main checkout.
+  expect(isInside(wtPath, join(appData, 'worktrees', 'repo')), `${wtPath} vs ${appData}`).toBe(
+    true,
+  );
+  expect(isInside(wtPath, project)).toBe(false);
+  expect(readFileSync(join(wtPath, 'notes.txt'), 'utf8')).toBe('status: final\n');
   // The main checkout is untouched: same file, clean status, still on main.
   expect(readFileSync(join(project, 'notes.txt'), 'utf8')).toBe('status: draft\n');
   expect(git(project, 'status', '--porcelain')).toBe('');
   expect(git(project, 'branch', '--show-current').trim()).toBe('main');
-  expect(git(wtPath!, 'branch', '--show-current').trim()).toMatch(
+  expect(git(wtPath, 'branch', '--show-current').trim()).toMatch(
     /^agent\/edit-the-notes-in-a-worktree-/,
   );
 
@@ -195,9 +215,9 @@ test('a worktree session leaves the main checkout untouched', async () => {
     })) as typeof dialog.showMessageBox;
   });
   // The worktree has an uncommitted change, so git refuses; commit it first like a user would.
-  git(wtPath!, 'commit', '-qam', 'agent change');
+  git(wtPath, 'commit', '-qam', 'agent change');
   await page.getByRole('button', { name: 'Session menu' }).click();
-  await expect.poll(() => existsSync(wtPath!)).toBe(false);
+  await expect.poll(() => existsSync(wtPath)).toBe(false);
   expect(git(project, 'branch', '--list', 'agent/*')).toContain(
     'agent/edit-the-notes-in-a-worktree-',
   );
