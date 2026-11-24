@@ -1,5 +1,6 @@
 import type { AgentEvent } from '../../../../shared/events';
 import { displayPath, oneLine } from '../claude/mapEvents';
+import { replaceCodexDirectives, splitStreaming } from './citations';
 import type { ServerNotification } from './protocol/ServerNotification';
 import type { ThreadItem } from './protocol/v2/ThreadItem';
 import type { TurnStatus } from './protocol/v2/TurnStatus';
@@ -108,6 +109,8 @@ export class CodexEventMapper {
   private readonly fileChanges = new Map<string, FileChangeItem>();
   private readonly started = new Set<string>();
   private readonly turnStart = new Map<string, number>();
+  /** Message text held back while a Codex directive is still arriving. */
+  private readonly pendingText = new Map<string, string>();
 
   constructor(
     private readonly sessionId: string,
@@ -148,7 +151,13 @@ export class CodexEventMapper {
       }
       case 'item/agentMessage/delta': {
         const p = rawParams as NotificationParams<'item/agentMessage/delta'>;
-        return [{ t: 'text.delta', sessionId, itemId: p.itemId, text: p.delta }];
+        // Codex's own directives (file citations) become readable text as they stream.
+        const { show, keep } = splitStreaming(
+          (this.pendingText.get(p.itemId) ?? '') + p.delta,
+          this.cwd,
+        );
+        this.pendingText.set(p.itemId, keep);
+        return show ? [{ t: 'text.delta', sessionId, itemId: p.itemId, text: show }] : [];
       }
       case 'item/commandExecution/outputDelta': {
         const p = rawParams as NotificationParams<'item/commandExecution/outputDelta'>;
@@ -165,9 +174,9 @@ export class CodexEventMapper {
       case 'item/completed': {
         const { item } = rawParams as NotificationParams<'item/completed'>;
         if (item.type === 'agentMessage') {
-          return item.text.trim()
-            ? [{ t: 'text.done', sessionId, itemId: item.id, text: item.text }]
-            : [];
+          this.pendingText.delete(item.id);
+          const text = replaceCodexDirectives(item.text, this.cwd);
+          return text.trim() ? [{ t: 'text.done', sessionId, itemId: item.id, text }] : [];
         }
         const ok = toolOk(item);
         if (ok === null) return [];

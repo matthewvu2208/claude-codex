@@ -120,9 +120,16 @@ test('Codex gets attached images as images', async () => {
   await expect(box.getByRole('list', { name: 'Attachments' })).toContainText('photo.png');
   await page.getByRole('textbox', { name: 'Task' }).fill('Describe this photo');
   await page.getByRole('button', { name: 'Start session' }).click();
-  await expect(
-    page.getByRole('log', { name: 'Conversation' }).getByText('I received 1 image and 0 files.'),
-  ).toBeVisible();
+  const log = page.getByRole('log', { name: 'Conversation' });
+  await expect(log.getByText('I received 1 image and 0 files.')).toBeVisible();
+
+  // Codex's file-citation directives read as file names, never as raw syntax.
+  const message = page.getByRole('textbox', { name: 'Message' });
+  await message.fill('Please cite the readme');
+  await message.press('Enter');
+  await expect(log.getByText('for you.', { exact: false })).toBeVisible();
+  await expect(log.locator('code', { hasText: /^README\.md$/ })).toBeVisible();
+  await expect(log).not.toContainText(':codex-');
   await app.close();
 });
 

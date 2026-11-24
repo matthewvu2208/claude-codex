@@ -100,6 +100,13 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
     if (text.startsWith(ATTACHED)) {
       const [body, images] = text.slice(ATTACHED.length).split('\u0000');
       await streamMessage(threadId, turnId, describeAttachments(body ?? '', Number(images)) ?? '');
+    } else if (lower.includes('cite the readme')) {
+      // Codex marks sources with its own directive; the app must show it as a file name.
+      await streamMessage(
+        threadId,
+        turnId,
+        `I read :codex-file-citation{path="${join(t.cwd, 'README.md')}" purpose="source"} for you.`,
+      );
     } else if (text.startsWith('<subsession_report')) {
       const body = text.split('\n')[1] ?? '';
       await streamMessage(threadId, turnId, `The sub-session reported back. It said: ${body}`);
