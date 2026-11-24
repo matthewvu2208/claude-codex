@@ -1,12 +1,18 @@
-import { ArrowUp, Plus, Shield, Square } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
-import { PERMISSION_LABELS, type Permission } from '../../../shared/agents';
+import { ArrowUp, Plus, Square } from 'lucide-react';
+import { useRef, useState, type KeyboardEvent } from 'react';
+import type { AgentId } from '../../../shared/agents';
+import type { ModelInfo } from '../../../shared/events';
+import { AgentControls, type AgentSettings } from '../common/AgentControls';
+import { usePicker } from '../common/usePicker';
 
 interface ComposerProps {
+  sessionId: string;
+  agent: AgentId;
   agentLabel: string;
-  modelLabel: string;
-  effortLabel: string;
-  permission: Permission;
+  models: ModelInfo[] | undefined;
+  settings: AgentSettings;
+  fallbackModelLabel: string;
+  onSettingsChange: (patch: Partial<AgentSettings>) => void;
   running: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
@@ -16,15 +22,20 @@ const toolButton = 'h-9 rounded-lg px-3 text-[15px] text-row hover:bg-raised';
 
 /** Sticky reply box. Enter sends, Shift+Enter adds a line, Esc stops a running turn. */
 export function Composer({
+  sessionId,
+  agent,
   agentLabel,
-  modelLabel,
-  effortLabel,
-  permission,
+  models,
+  settings,
+  fallbackModelLabel,
+  onSettingsChange,
   running,
   onSend,
   onStop,
 }: ComposerProps) {
   const [text, setText] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const picker = usePicker({ textareaRef, text, setText, source: { sessionId }, agent });
 
   const send = () => {
     if (!text.trim()) return;
@@ -33,6 +44,7 @@ export function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (picker.onKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       send();
@@ -49,39 +61,41 @@ export function Composer({
         e.preventDefault();
         send();
       }}
-      className="flex flex-col gap-2 rounded-[18px] border border-border-card bg-surface px-3.5 py-3 shadow-card focus-within:border-border-strong"
+      className="relative flex flex-col gap-2 rounded-[18px] border border-border-card bg-surface px-3.5 py-3 shadow-card focus-within:border-border-strong"
     >
+      {picker.popover}
       <textarea
+        ref={textareaRef}
         aria-label="Message"
         placeholder={`Reply to ${agentLabel}…`}
         rows={2}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
+        {...picker.textareaProps}
         className="max-h-60 resize-none bg-transparent px-2 py-1.5 text-[16px] leading-normal text-primary outline-none focus-visible:outline-none [field-sizing:content]"
       />
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
           aria-label="Add context"
+          title="Reference a file (@)"
+          onClick={() => {
+            setText((t) => `${t}${t && !/\s$/.test(t) ? ' ' : ''}@`);
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          }}
           className="flex size-10 items-center justify-center rounded-[10px] text-label hover:bg-raised"
         >
           <Plus size={20} strokeWidth={1.8} aria-hidden />
         </button>
-        <button type="button" aria-label={`Model: ${modelLabel}`} className={toolButton}>
-          {modelLabel}
-        </button>
-        <button type="button" aria-label={`Effort: ${effortLabel}`} className={toolButton}>
-          {effortLabel}
-        </button>
-        <button
-          type="button"
-          aria-label={`Permission mode: ${PERMISSION_LABELS[permission]}`}
-          className={`${toolButton} flex items-center gap-[7px]`}
-        >
-          <Shield size={16} strokeWidth={1.8} aria-hidden />
-          {PERMISSION_LABELS[permission]}
-        </button>
+        <AgentControls
+          agent={agent}
+          models={models}
+          value={settings}
+          fallbackModelLabel={fallbackModelLabel}
+          onChange={onSettingsChange}
+          buttonClassName={toolButton}
+        />
         <span className="flex-1" />
         {running ? (
           <button

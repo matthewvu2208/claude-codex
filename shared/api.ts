@@ -23,10 +23,15 @@ export interface Api {
     create: Invoke<'sessions:create'>;
     rename: Invoke<'sessions:rename'>;
     archive: Invoke<'sessions:archive'>;
+    update: Invoke<'sessions:update'>;
     events: Invoke<'sessions:events'>;
     menu: Invoke<'sessions:menu'>;
   };
+  readonly fs: {
+    files: Invoke<'fs:files'>;
+  };
   readonly agent: {
+    commands: Invoke<'agent:commands'>;
     status: Invoke<'agent:status'>;
     signIn: Invoke<'agent:signIn'>;
     setApiKey: Invoke<'agent:setApiKey'>;

@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import type { AgentId, Permission } from '../../../shared/agents';
+import type { AgentId } from '../../../shared/agents';
+import type { ModelInfo } from '../../../shared/events';
 import type { Folder } from '../../../shared/models';
+import type { AgentSettings } from '../common/AgentControls';
 import { AgentCards } from './AgentCards';
 import { CommandBox } from './CommandBox';
 
@@ -10,17 +11,13 @@ interface WelcomeProps {
   onAgentChange: (agent: AgentId) => void;
   folder: Folder | null;
   onChooseFolder: (at: { x: number; y: number }) => void;
-  onStart: (opts: {
-    agent: AgentId;
-    text: string;
-    worktree: boolean;
-    model: string | null;
-    effort: string;
-    permission: Permission;
-  }) => void;
+  models: ModelInfo[] | undefined;
+  settings: AgentSettings;
+  onSettingsChange: (patch: Partial<AgentSettings>) => void;
+  onStart: (opts: { agent: AgentId; text: string; worktree: boolean } & AgentSettings) => void;
 }
 
-/** Fixture defaults until M5 wires the model list per agent. */
+/** Labels shown before an agent's model list has loaded. */
 export const DEFAULT_MODEL: Record<AgentId, { value: string | null; label: string }> = {
   claude: { value: 'opus', label: 'Opus 5.5' },
   codex: { value: null, label: 'Default model' },
@@ -32,11 +29,11 @@ export function Welcome({
   onAgentChange,
   folder,
   onChooseFolder,
+  models,
+  settings,
+  onSettingsChange,
   onStart,
 }: WelcomeProps) {
-  const [permission] = useState<Permission>('ask');
-  const effort = 'low';
-
   return (
     <main className="flex min-w-0 flex-1 flex-col items-center justify-center gap-9 overflow-y-auto px-8 py-14">
       <h1 className="m-0 text-center text-[44px] leading-[1.2] font-semibold">
@@ -45,15 +42,23 @@ export function Welcome({
       <AgentCards value={agent} plans={plans} onChange={onAgentChange} />
       <div className="flex w-full max-w-[1080px] flex-col gap-3.5">
         <CommandBox
+          key={agent}
+          agent={agent}
+          folderId={folder?.id ?? null}
           folderName={folder?.name ?? null}
           onChooseFolder={onChooseFolder}
-          model={DEFAULT_MODEL[agent].label}
-          effort="Low"
-          permission={permission}
+          models={models}
+          settings={settings}
+          fallbackModelLabel={DEFAULT_MODEL[agent].label}
+          onSettingsChange={onSettingsChange}
           worktreeAvailable={folder?.isGitRepo ?? false}
-          onStart={(t) =>
-            onStart({ agent, ...t, model: DEFAULT_MODEL[agent].value, effort, permission })
-          }
+          onStart={(t) => {
+            // Fill in the model's own defaults when none was chosen.
+            const model = settings.model ?? models?.[0]?.value ?? null;
+            const effort =
+              settings.effort ?? models?.find((m) => m.value === model)?.defaultEffort ?? null;
+            onStart({ agent, ...t, model, effort, permission: settings.permission });
+          }}
         />
         <div className="flex flex-wrap justify-center gap-9 text-[14px] text-muted">
           <span>

@@ -11,13 +11,30 @@ import {
 } from './models';
 
 /** Settings the renderer may read and write. */
+const AgentDefaultsSchema = z.object({
+  model: z.string().max(200).optional(),
+  effort: z.string().max(50).optional(),
+  permission: PermissionSchema.optional(),
+});
+export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
+
 export const SettingsSchema = z.object({
   lastAgent: AgentIdSchema.optional(),
   lastFolderId: IdSchema.optional(),
+  /** Last model, effort and permission chosen per agent on the Welcome screen. */
+  agentDefaults: z.partialRecord(AgentIdSchema, AgentDefaultsSchema).optional(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
-export const SessionMenuActionSchema = z.enum(['rename', 'archive', 'reveal', 'copy-id']);
+export const SessionMenuActionSchema = z.enum([
+  'rename',
+  'archive',
+  'reveal',
+  'copy-id',
+  'open-worktree',
+  'merge-worktree',
+  'remove-worktree',
+]);
 export type SessionMenuAction = z.infer<typeof SessionMenuActionSchema>;
 
 const Point = z.object({ x: z.number().int(), y: z.number().int() });
@@ -51,6 +68,31 @@ export const ipcContract = {
     output: SessionSchema,
   },
   'sessions:archive': { input: z.object({ id: IdSchema }), output: z.null() },
+  /** Model, effort or permission mid-session; the agent applies it live or between turns. */
+  'sessions:update': {
+    input: z.object({
+      id: IdSchema,
+      model: z.string().min(1).max(200).optional(),
+      effort: z.string().min(1).max(50).optional(),
+      permission: PermissionSchema.optional(),
+    }),
+    output: SessionSchema,
+  },
+  /** Files for the @ picker, relative to a session's folder (or a folder before a session starts). */
+  'fs:files': {
+    input: z
+      .object({
+        sessionId: IdSchema.optional(),
+        folderId: IdSchema.optional(),
+        query: z.string().max(200),
+      })
+      .refine((v) => !!v.sessionId !== !!v.folderId, 'Pass a session or a folder'),
+    output: z.array(z.string()),
+  },
+  'agent:commands': {
+    input: z.object({ agent: AgentIdSchema }),
+    output: z.array(z.object({ name: z.string(), description: z.string() })),
+  },
   'sessions:events': { input: z.object({ id: IdSchema }), output: z.array(StoredEventSchema) },
   /** Native context menu for a session row; reveal and copy are handled in main. */
   'sessions:menu': {

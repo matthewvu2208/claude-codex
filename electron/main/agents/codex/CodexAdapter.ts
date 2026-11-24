@@ -5,7 +5,14 @@ import type {
   ApprovalDecision,
   ModelInfo,
 } from '../../../../shared/events';
-import type { AgentAdapter, StartOptions, UsageSnapshot, UserInput } from '../types';
+import type {
+  AgentAdapter,
+  ApplyResult,
+  SlashCommandInfo,
+  StartOptions,
+  UsageSnapshot,
+  UserInput,
+} from '../types';
 import { CodexEventMapper, fileChangeDetail, fileChangeTitle } from './mapEvents';
 import type { AskForApproval } from './protocol/v2/AskForApproval';
 import type { GetAccountResponse } from './protocol/v2/GetAccountResponse';
@@ -15,6 +22,7 @@ import type { ModelListResponse } from './protocol/v2/ModelListResponse';
 import type { PlanType } from './protocol/PlanType';
 import type { RateLimitSnapshot } from './protocol/v2/RateLimitSnapshot';
 import type { SandboxMode } from './protocol/v2/SandboxMode';
+import type { SandboxPolicy } from './protocol/v2/SandboxPolicy';
 import type { ThreadResumeResponse } from './protocol/v2/ThreadResumeResponse';
 import type { ThreadStartResponse } from './protocol/v2/ThreadStartResponse';
 import type { TurnStartResponse } from './protocol/v2/TurnStartResponse';
@@ -32,6 +40,19 @@ export const CODEX_PERMISSIONS: Record<
   'read-only': { approvalPolicy: 'on-request', sandbox: 'read-only' },
   full: { approvalPolicy: 'never', sandbox: 'danger-full-access' },
 };
+
+/** Per-turn sandbox, so a permission change applies from the next turn. */
+export function sandboxPolicy(mode: SandboxMode): SandboxPolicy {
+  if (mode === 'danger-full-access') return { type: 'dangerFullAccess' };
+  if (mode === 'read-only') return { type: 'readOnly', networkAccess: false };
+  return {
+    type: 'workspaceWrite',
+    writableRoots: [],
+    networkAccess: false,
+    excludeTmpdirEnvVar: false,
+    excludeSlashTmp: false,
+  };
+}
 
 const PLAN_LABELS: Partial<Record<PlanType, string>> = {
   free: 'ChatGPT Free',
@@ -69,6 +90,8 @@ interface Thread {
   effort: string | undefined;
   permission: Permission;
   activeTurnId: string | null;
+  /** Turns already finished, so a late turn/start response cannot mark one active again. */
+  finishedTurns: Set<string>;
   mapper: CodexEventMapper;
 }
 
@@ -201,6 +224,10 @@ export class CodexAdapter implements AgentAdapter {
     if (method === 'turn/completed') {
       const id = (params as { turn: { id: string } }).turn.id;
       if (thread.activeTurnId === id) thread.activeTurnId = null;
+      thread.finishedTurns.add(id);
+      if (thread.finishedTurns.size > 50) {
+        thread.finishedTurns.delete(thread.finishedTurns.values().next().value!);
+      }
     }
     if (method === 'serverRequest/resolved') {
       const requestId = `codex:${String(params['requestId'])}`;
@@ -394,6 +421,7 @@ export class CodexAdapter implements AgentAdapter {
       effort: o.effort,
       permission: o.permission,
       activeTurnId: null,
+      finishedTurns: new Set(),
       mapper: new CodexEventMapper(o.sessionId, o.cwd),
     };
     this.threads.set(o.sessionId, thread);
@@ -420,9 +448,16 @@ export class CodexAdapter implements AgentAdapter {
       ...(thread.model ? { model: thread.model } : {}),
       ...(thread.effort ? { effort: thread.effort } : {}),
       approvalPolicy: CODEX_PERMISSIONS[thread.permission].approvalPolicy,
+      sandboxPolicy: sandboxPolicy(CODEX_PERMISSIONS[thread.permission].sandbox),
     });
     // turn/started may already have arrived; either way the turn is now active.
-    if (!thread.activeTurnId && res.turn.status === 'inProgress') thread.activeTurnId = res.turn.id;
+    if (
+      !thread.activeTurnId &&
+      res.turn.status === 'inProgress' &&
+      !thread.finishedTurns.has(res.turn.id)
+    ) {
+      thread.activeTurnId = res.turn.id;
+    }
   }
 
   async interrupt(sessionId: string): Promise<void> {
@@ -446,14 +481,27 @@ export class CodexAdapter implements AgentAdapter {
     this.emit({ t: 'approval.resolved', sessionId: pending.sessionId, requestId, decision: d });
   }
 
-  async setModel(sessionId: string, model: string): Promise<void> {
+  // Model, effort and permission are sent with every turn/start, so changes apply next turn.
+  async setModel(sessionId: string, model: string): Promise<ApplyResult> {
     const thread = this.threads.get(sessionId);
     if (thread) thread.model = model;
+    return 'applied';
   }
 
-  async setPermission(sessionId: string, permission: Permission): Promise<void> {
+  async setEffort(sessionId: string, effort: string): Promise<ApplyResult> {
+    const thread = this.threads.get(sessionId);
+    if (thread) thread.effort = effort;
+    return 'applied';
+  }
+
+  async setPermission(sessionId: string, permission: Permission): Promise<ApplyResult> {
     const thread = this.threads.get(sessionId);
     if (thread) thread.permission = permission;
+    return 'applied';
+  }
+
+  async listCommands(): Promise<SlashCommandInfo[]> {
+    return [];
   }
 
   async close(sessionId: string): Promise<void> {

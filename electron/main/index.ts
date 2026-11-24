@@ -87,7 +87,12 @@ void app.whenReady().then(() => {
 
   store = createStore(openDatabase(join(app.getPath('userData'), 'app.db')));
   runtime = createRuntime(store, () => mainWindow);
-  registerIpc(createHandlers(store, runtime.hub, runtime.accounts), appUrl);
+  registerIpc(
+    createHandlers(store, runtime.hub, runtime.accounts, {
+      worktreeRoot: () => join(app.getPath('userData'), 'worktrees'),
+    }),
+    appUrl,
+  );
 
   mainWindow = createWindow();
 

@@ -24,10 +24,15 @@ const api: Api = {
     create: invoke('sessions:create'),
     rename: invoke('sessions:rename'),
     archive: invoke('sessions:archive'),
+    update: invoke('sessions:update'),
     events: invoke('sessions:events'),
     menu: invoke('sessions:menu'),
   },
+  fs: {
+    files: invoke('fs:files'),
+  },
   agent: {
+    commands: invoke('agent:commands'),
     status: invoke('agent:status'),
     signIn: invoke('agent:signIn'),
     setApiKey: invoke('agent:setApiKey'),

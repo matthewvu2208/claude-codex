@@ -5,6 +5,7 @@ import {
   type ApprovalDecision,
   type EventEnvelope,
 } from '../../../shared/events';
+import type { Permission } from '../../../shared/agents';
 import type { Session, SessionStatus } from '../../../shared/models';
 import type { Store } from '../store/repositories';
 import type { AgentAdapter } from './types';
@@ -33,6 +34,8 @@ export class AgentHub {
   private queue: EventEnvelope[] = [];
   private timer: NodeJS.Timeout | null = null;
   private readonly unsubscribers: (() => void)[] = [];
+  /** Sessions whose agent restarts after the current turn to pick up a setting. */
+  private readonly restartAfterTurn = new Set<string>();
 
   constructor(private readonly o: HubOptions) {
     for (const adapter of Object.values(o.adapters)) {
@@ -66,6 +69,10 @@ export class AgentHub {
     }
     if (e.t === 'approval.request')
       this.o.notify?.(session, `${session.title} needs approval`, e.title);
+    // A setting that needs a restart waits for the turn to end, then the next send resumes.
+    if (e.t === 'turn.done' && this.restartAfterTurn.delete(session.id)) {
+      void this.adapterFor(session)?.close(session.id);
+    }
   }
 
   private adapterFor(session: Session): AgentAdapter | undefined {
@@ -116,6 +123,31 @@ export class AgentHub {
       });
       throw err;
     }
+  }
+
+  /**
+   * Changes model, effort or permission mid-session. Each agent applies what it can at once;
+   * anything that needs a restart happens between turns, resuming the same conversation.
+   */
+  async updateSettings(
+    sessionId: string,
+    patch: { model?: string; effort?: string; permission?: Permission },
+  ): Promise<Session> {
+    const session = this.o.store.sessions.update(sessionId, patch);
+    const adapter = this.adapterFor(session);
+    if (!adapter) return session;
+    const results = await Promise.all([
+      patch.model !== undefined ? adapter.setModel(sessionId, patch.model) : 'applied',
+      patch.effort !== undefined ? adapter.setEffort(sessionId, patch.effort) : 'applied',
+      patch.permission !== undefined
+        ? adapter.setPermission(sessionId, patch.permission)
+        : 'applied',
+    ]);
+    if (results.includes('restart')) {
+      if (adapter.isRunning(sessionId)) this.restartAfterTurn.add(sessionId);
+      else await adapter.close(sessionId);
+    }
+    return session;
   }
 
   async interrupt(sessionId: string): Promise<void> {

@@ -140,6 +140,10 @@ export function fakeQuery(params: {
       const file = join(cwd, 'README.md');
       await tool('Read', { file_path: file }, () => existsSync(file));
       await streamText('Here is what `README.md` says:\n\n```ts\nconst answer = 42;\n```');
+    } else if (lower.includes('which model')) {
+      await streamText(
+        `I am running on ${options.model ?? 'the default model'} at ${options.effort ?? 'default'} effort.`,
+      );
     } else {
       await streamText('Hello from the test agent.');
     }
@@ -180,7 +184,9 @@ export function fakeQuery(params: {
       abort.abort();
       return undefined;
     },
-    setModel: async () => undefined,
+    setModel: async (model: string) => {
+      options.model = model;
+    },
     setPermissionMode: async (mode: NonNullable<Options['permissionMode']>) => {
       options.permissionMode = mode;
     },
@@ -197,6 +203,10 @@ export function fakeQuery(params: {
         description: 'Test model',
         supportedEffortLevels: ['low', 'medium', 'high'],
       },
+    ],
+    supportedCommands: async () => [
+      { name: 'review', description: 'Review the current changes', argumentHint: '' },
+      { name: 'compact', description: 'Summarize the conversation so far', argumentHint: '' },
     ],
     accountInfo: async () => ({ subscriptionType: 'max', email: 'test@example.com' }),
     getContextUsage: async () => ({

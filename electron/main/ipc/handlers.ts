@@ -6,6 +6,13 @@ import { titleFromPrompt, type Folder } from '../../../shared/models';
 import type { FolderRow, Store } from '../store/repositories';
 import type { AgentHub } from '../agents/hub';
 import type { AccountsService } from '../services/accounts';
+import {
+  createWorktree,
+  listFiles,
+  mergeWorktree,
+  rankFiles,
+  removeWorktree,
+} from '../services/git';
 import type { Handlers } from './router';
 import { SettingsSchema } from '../../../shared/ipc';
 
@@ -27,7 +34,64 @@ function popup(
   });
 }
 
-export function createHandlers(store: Store, hub: AgentHub, accounts: AccountsService): Handlers {
+export interface HandlerOptions {
+  /** Where session worktrees live: <appData>/worktrees/<repo>/<session-slug>. */
+  worktreeRoot: () => string;
+}
+
+export function createHandlers(
+  store: Store,
+  hub: AgentHub,
+  accounts: AccountsService,
+  options: HandlerOptions,
+): Handlers {
+  const confirm = async (
+    event: IpcMainInvokeEvent,
+    message: string,
+    detail: string,
+    ok: string,
+  ) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const opts: Electron.MessageBoxOptions = {
+      type: 'question',
+      message,
+      detail,
+      buttons: [ok, 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+    };
+    const r = window
+      ? await dialog.showMessageBox(window, opts)
+      : await dialog.showMessageBox(opts);
+    return r.response === 0;
+  };
+
+  const notifyError = async (event: IpcMainInvokeEvent, message: string, e: unknown) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const opts: Electron.MessageBoxOptions = {
+      type: 'error',
+      message,
+      detail: e instanceof Error ? e.message : String(e),
+    };
+    if (window) await dialog.showMessageBox(window, opts);
+    else await dialog.showMessageBox(opts);
+  };
+
+  const sessionRoot = (input: {
+    sessionId?: string | undefined;
+    folderId?: string | undefined;
+  }) => {
+    if (input.sessionId) {
+      const s = store.sessions.get(input.sessionId);
+      if (!s) throw new Error('Unknown session');
+      return s.worktreePath ?? s.cwd;
+    }
+    const f = store.folders.get(input.folderId!);
+    if (!f) throw new Error('Unknown folder');
+    return f.path;
+  };
+  const fileCache = new Map<string, { at: number; files: string[] }>();
+
   const addFolder = (path: string): Folder => {
     if (!statSync(path).isDirectory()) throw new Error('Not a folder');
     return toFolder(store.folders.upsert(path, basename(path) || path));
@@ -76,15 +140,23 @@ export function createHandlers(store: Store, hub: AgentHub, accounts: AccountsSe
 
     'sessions:list': () => store.sessions.list(),
 
-    'sessions:create': (input) => {
+    'sessions:create': async (input) => {
       const folder = store.folders.get(input.folderId);
       if (!folder) throw new Error('Unknown folder');
       store.folders.touch(folder.id);
+      const title = titleFromPrompt(input.prompt);
+      // A worktree keeps the session's changes out of the main checkout.
+      const worktree =
+        input.worktree && isGitRepo(folder.path)
+          ? await createWorktree(folder.path, options.worktreeRoot(), title)
+          : null;
       const session = store.sessions.create({
         folderId: folder.id,
         agent: input.agent,
-        title: titleFromPrompt(input.prompt),
+        title,
         cwd: folder.path,
+        worktreePath: worktree?.path ?? null,
+        branch: worktree?.branch ?? null,
         model: input.model,
         effort: input.effort,
         permission: input.permission,
@@ -94,6 +166,23 @@ export function createHandlers(store: Store, hub: AgentHub, accounts: AccountsSe
     },
 
     'sessions:rename': ({ id, title }) => store.sessions.rename(id, title),
+
+    'sessions:update': ({ id, ...patch }) => {
+      if (!store.sessions.get(id)) throw new Error('Unknown session');
+      const clean = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+      return hub.updateSettings(id, clean);
+    },
+
+    'fs:files': async (input) => {
+      const root = sessionRoot(input);
+      const cached = fileCache.get(root);
+      const files =
+        cached && Date.now() - cached.at < 10_000 ? cached.files : await listFiles(root);
+      fileCache.set(root, { at: Date.now(), files });
+      return rankFiles(files, input.query);
+    },
+
+    'agent:commands': ({ agent }) => hub.adapter(agent).listCommands(),
 
     'sessions:archive': ({ id }) => {
       store.sessions.archive(id);
@@ -115,12 +204,58 @@ export function createHandlers(store: Store, hub: AgentHub, accounts: AccountsSe
           { type: 'separator' },
           { label: reveal, click: () => (action = 'reveal') },
           { label: 'Copy session ID', click: () => (action = 'copy-id') },
+          ...(session.worktreePath && session.branch
+            ? [
+                { type: 'separator' as const },
+                { label: 'Open worktree', click: () => (action = 'open-worktree') },
+                { label: 'Merge into current branch', click: () => (action = 'merge-worktree') },
+                { label: 'Remove worktree', click: () => (action = 'remove-worktree') },
+              ]
+            : []),
         ],
         at,
       );
       const picked = action as SessionMenuAction | null;
       if (picked === 'reveal') shell.showItemInFolder(session.worktreePath ?? session.cwd);
       if (picked === 'copy-id') clipboard.writeText(session.id);
+      if (picked === 'open-worktree' && session.worktreePath)
+        void shell.openPath(session.worktreePath);
+      if (picked === 'merge-worktree' && session.worktreePath && session.branch) {
+        const ok = await confirm(
+          event,
+          `Merge ${session.branch} into the current branch?`,
+          `Uncommitted changes in the worktree are committed first, then merged into ${basename(session.cwd)}.`,
+          'Merge',
+        );
+        if (ok) {
+          try {
+            await mergeWorktree(
+              session.cwd,
+              { path: session.worktreePath, branch: session.branch },
+              `Session: ${session.title}`,
+            );
+          } catch (e) {
+            await notifyError(event, 'Could not merge the worktree', e);
+          }
+        }
+      }
+      if (picked === 'remove-worktree' && session.worktreePath) {
+        const ok = await confirm(
+          event,
+          'Remove this worktree?',
+          `The folder is deleted; the branch ${session.branch ?? ''} is kept. The session continues in the main checkout.`,
+          'Remove',
+        );
+        if (ok) {
+          try {
+            await hub.close(session.id);
+            await removeWorktree(session.cwd, session.worktreePath);
+            store.sessions.update(session.id, { worktreePath: null });
+          } catch (e) {
+            await notifyError(event, 'Could not remove the worktree', e);
+          }
+        }
+      }
       return picked;
     },
 

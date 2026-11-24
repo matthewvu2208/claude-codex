@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AGENT_IDS, type AgentId, type Permission } from '../../shared/agents';
 import type { AccountStatus, ModelInfo } from '../../shared/events';
+import type { AgentSettings } from '../components/common/AgentControls';
 import type { Folder, Session, SessionStatus } from '../../shared/models';
 import { api } from '../lib/ipc';
 
@@ -17,8 +18,12 @@ interface AppState {
   accounts: Partial<Record<AgentId, AccountStatus>>;
   models: Partial<Record<AgentId, ModelInfo[]>>;
   accountsOpen: boolean;
+  /** Model, effort and permission the Welcome screen starts each agent with. */
+  welcome: Record<AgentId, AgentSettings>;
 
   load: () => Promise<void>;
+  setWelcomeSettings: (agent: AgentId, patch: Partial<AgentSettings>) => void;
+  updateSession: (id: string, patch: Partial<AgentSettings>) => Promise<void>;
   refreshAccounts: () => Promise<void>;
   loadModels: (agent: AgentId) => Promise<void>;
   setAccountsOpen: (open: boolean) => void;
@@ -41,6 +46,12 @@ interface AppState {
   sessionMenu: (id: string, at?: { x: number; y: number }) => Promise<void>;
 }
 
+/** Design defaults (artboard 1): Opus 5.5, Low, Ask. Codex starts on its default model. */
+export const WELCOME_DEFAULTS: Record<AgentId, AgentSettings> = {
+  claude: { model: 'opus', effort: 'low', permission: 'ask' },
+  codex: { model: null, effort: null, permission: 'ask' },
+};
+
 const upsertFolder = (folders: Folder[], f: Folder) =>
   [f, ...folders.filter((x) => x.id !== f.id)].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
 
@@ -56,6 +67,38 @@ export const useApp = create<AppState>((set, get) => ({
   accounts: {},
   models: {},
   accountsOpen: false,
+  welcome: WELCOME_DEFAULTS,
+
+  setWelcomeSettings: (agent, patch) => {
+    const welcome = { ...get().welcome, [agent]: { ...get().welcome[agent], ...patch } };
+    set({ welcome });
+    const agentDefaults = Object.fromEntries(
+      AGENT_IDS.map((a) => {
+        const w = welcome[a];
+        return [
+          a,
+          {
+            ...(w.model ? { model: w.model } : {}),
+            ...(w.effort ? { effort: w.effort } : {}),
+            permission: w.permission,
+          },
+        ];
+      }),
+    );
+    void api.settings.set({ agentDefaults });
+  },
+
+  updateSession: async (id, patch) => {
+    const clean = {
+      ...(patch.model ? { model: patch.model } : {}),
+      ...(patch.effort ? { effort: patch.effort } : {}),
+      ...(patch.permission ? { permission: patch.permission } : {}),
+    };
+    // Show the choice at once; the stored session comes back from main.
+    set((s) => ({ sessions: s.sessions.map((x) => (x.id === id ? { ...x, ...clean } : x)) }));
+    const updated = await api.sessions.update({ id, ...clean });
+    set((s) => ({ sessions: s.sessions.map((x) => (x.id === id ? updated : x)) }));
+  },
 
   refreshAccounts: async () => {
     const results = await Promise.all(
@@ -67,7 +110,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   loadModels: async (agent) => {
-    if (get().models[agent]) return;
+    if (get().models[agent]?.length) return;
     try {
       const list = await api.agent.models({ agent });
       set((s) => ({ models: { ...s.models, [agent]: list } }));
@@ -96,7 +139,25 @@ export const useApp = create<AppState>((set, get) => ({
     ]);
     const folderId =
       folders.find((f) => f.id === settings.lastFolderId)?.id ?? folders[0]?.id ?? null;
-    set({ loaded: true, folders, sessions, folderId, agent: settings.lastAgent ?? 'claude' });
+    const welcome = { ...WELCOME_DEFAULTS };
+    for (const a of AGENT_IDS) {
+      const d = settings.agentDefaults?.[a];
+      if (d) {
+        welcome[a] = {
+          model: d.model ?? welcome[a].model,
+          effort: d.effort ?? welcome[a].effort,
+          permission: d.permission ?? welcome[a].permission,
+        };
+      }
+    }
+    set({
+      loaded: true,
+      folders,
+      sessions,
+      folderId,
+      agent: settings.lastAgent ?? 'claude',
+      welcome,
+    });
   },
 
   open: (id) => set((s) => ({ activeId: id, lastSessionId: s.activeId ?? s.lastSessionId })),
@@ -154,5 +215,6 @@ export const useApp = create<AppState>((set, get) => ({
     const action = await api.sessions.menu(at ? { id, at } : { id });
     if (action === 'rename') set({ renamingId: id });
     if (action === 'archive') await get().archive(id);
+    if (action === 'remove-worktree') set({ sessions: await api.sessions.list() });
   },
 }));

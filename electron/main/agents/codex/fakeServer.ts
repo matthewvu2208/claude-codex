@@ -15,7 +15,10 @@ type Json = Record<string, unknown>;
 export function createFakeAppServer(write: (line: string) => void): (line: string) => void {
   const store = join(process.env['CLAUDE_CODEX_FAKE_DIR'] ?? tmpdir(), 'codex-fake');
   mkdirSync(store, { recursive: true });
-  const threads = new Map<string, { cwd: string; history: string[] }>();
+  const threads = new Map<
+    string,
+    { cwd: string; history: string[]; model: string; effort: string }
+  >();
   const waiting = new Map<number, (result: Json) => void>();
   let serverRequestId = 1000;
   const interrupted = new Set<string>();
@@ -33,7 +36,7 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
   const loadThread = (threadId: string, cwd: string) => {
     const file = join(store, `${threadId}.json`);
     const history = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as string[]) : [];
-    const t = { cwd, history };
+    const t = { cwd, history, model: 'gpt-test', effort: 'medium' };
     threads.set(threadId, t);
     return t;
   };
@@ -141,6 +144,8 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
         turnId,
         'Here is what `README.md` says:\n\n```ts\nconst answer = 42;\n```',
       );
+    } else if (lower.includes('which model')) {
+      await streamMessage(threadId, turnId, `I am running on ${t.model} at ${t.effort} effort.`);
     } else {
       await streamMessage(threadId, turnId, 'Hello from the test agent.');
     }
@@ -202,6 +207,19 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
         return {
           data: [
             {
+              model: 'gpt-test-mini',
+              displayName: 'GPT Test Mini',
+              description: 'Smaller test model',
+              hidden: false,
+              isDefault: false,
+              supportedReasoningEfforts: [
+                { reasoningEffort: 'low' },
+                { reasoningEffort: 'medium' },
+                { reasoningEffort: 'high' },
+              ],
+              defaultReasoningEffort: 'low',
+            },
+            {
               model: 'gpt-test',
               displayName: 'GPT Test',
               description: 'Test model',
@@ -218,7 +236,8 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
         };
       case 'thread/start': {
         const id = randomUUID();
-        loadThread(id, String(p['cwd']));
+        const t = loadThread(id, String(p['cwd']));
+        if (typeof p['model'] === 'string') t.model = p['model'];
         return { thread: { id } };
       }
       case 'thread/resume': {
@@ -229,6 +248,9 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
       case 'turn/start': {
         const turnId = `turn_${randomUUID()}`;
         const input = (p['input'] as { text?: string }[])[0]?.text ?? '';
+        const t = threads.get(String(p['threadId']));
+        if (t && typeof p['model'] === 'string') t.model = p['model'];
+        if (t && typeof p['effort'] === 'string') t.effort = p['effort'];
         setTimeout(() => void runTurn(String(p['threadId']), turnId, input), 0);
         return { turn: { id: turnId, status: 'inProgress', items: [] } };
       }

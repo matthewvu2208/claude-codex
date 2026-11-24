@@ -18,7 +18,14 @@ import type {
   ApprovalDecision,
   ModelInfo,
 } from '../../../../shared/events';
-import type { AgentAdapter, StartOptions, UsageSnapshot, UserInput } from '../types';
+import type {
+  AgentAdapter,
+  ApplyResult,
+  SlashCommandInfo,
+  StartOptions,
+  UsageSnapshot,
+  UserInput,
+} from '../types';
 import { AsyncQueue } from '../asyncQueue';
 import { bundledClaudeBinary } from './binary';
 import { approvalContent, ClaudeEventMapper } from './mapEvents';
@@ -46,6 +53,7 @@ interface Live {
   input: AsyncQueue<SDKUserMessage>;
   mapper: ClaudeEventMapper;
   nativeId: string;
+  permission: Permission;
   activeTurn: { id: string; startedAt: number } | null;
   queuedTurns: string[];
   interrupting: boolean;
@@ -275,6 +283,7 @@ export class ClaudeAdapter implements AgentAdapter {
       input,
       mapper: new ClaudeEventMapper(o.sessionId, o.cwd),
       nativeId,
+      permission: o.permission,
       activeTurn: null,
       queuedTurns: [],
       interrupting: false,
@@ -428,12 +437,33 @@ export class ClaudeAdapter implements AgentAdapter {
     }
   }
 
-  async setModel(sessionId: string, model: string): Promise<void> {
-    await this.live.get(sessionId)?.q.setModel(model);
+  async setModel(sessionId: string, model: string): Promise<ApplyResult> {
+    const live = this.live.get(sessionId);
+    if (live && !live.closed) await live.q.setModel(model);
+    return 'applied';
   }
 
-  async setPermission(sessionId: string, permission: Permission): Promise<void> {
-    await this.live.get(sessionId)?.q.setPermissionMode(PERMISSION_MODES[permission]);
+  /** Effort is fixed when Claude Code starts, so it applies after a restart (same conversation). */
+  async setEffort(sessionId: string): Promise<ApplyResult> {
+    return this.live.has(sessionId) ? 'restart' : 'applied';
+  }
+
+  async setPermission(sessionId: string, permission: Permission): Promise<ApplyResult> {
+    const live = this.live.get(sessionId);
+    if (!live || live.closed) return 'applied';
+    // Skipping permissions has to be allowed when Claude Code starts.
+    if (permission === 'full' || live.permission === 'full') return 'restart';
+    await live.q.setPermissionMode(PERMISSION_MODES[permission]);
+    live.permission = permission;
+    return 'applied';
+  }
+
+  async listCommands(): Promise<SlashCommandInfo[]> {
+    const anyLive = [...this.live.values()].find((l) => !l.closed);
+    const commands = anyLive
+      ? await anyLive.q.supportedCommands()
+      : await this.probe((q) => q.supportedCommands());
+    return commands.map((c) => ({ name: c.name, description: c.description }));
   }
 
   async close(sessionId: string): Promise<void> {

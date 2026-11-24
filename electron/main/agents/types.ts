@@ -23,6 +23,13 @@ export interface UserInput {
   text: string;
 }
 
+export type ApplyResult = 'applied' | 'restart';
+
+export interface SlashCommandInfo {
+  name: string;
+  description: string;
+}
+
 export interface UsageSnapshot {
   agent: AgentId;
   /** 0–100 */
@@ -39,8 +46,14 @@ export interface AgentAdapter {
   send(sessionId: string, input: UserInput): Promise<void>;
   interrupt(sessionId: string): Promise<void>;
   respondApproval(requestId: string, d: ApprovalDecision): Promise<void>;
-  setModel(sessionId: string, model: string): Promise<void>;
-  setPermission(sessionId: string, permission: Permission): Promise<void>;
+  /**
+   * Mid-session changes. 'restart' means the change applies once the agent process restarts
+   * (the hub does that between turns, resuming the same conversation).
+   */
+  setModel(sessionId: string, model: string): Promise<ApplyResult>;
+  setEffort(sessionId: string, effort: string): Promise<ApplyResult>;
+  setPermission(sessionId: string, permission: Permission): Promise<ApplyResult>;
+  listCommands(): Promise<SlashCommandInfo[]>;
   listModels(): Promise<ModelInfo[]>;
   readUsage(): Promise<UsageSnapshot | null>;
   isRunning(sessionId: string): boolean;

@@ -1,19 +1,27 @@
 import { AGENT_LABELS } from '../../../shared/agents';
+import type { ModelInfo } from '../../../shared/events';
 import type { Session } from '../../../shared/models';
 import { api } from '../../lib/ipc';
 import type { ThreadState } from '../../lib/thread';
+import type { AgentSettings } from '../common/AgentControls';
 import { Composer } from './Composer';
 import { Thread } from './Thread';
 
 interface SessionViewProps {
   session: Session;
   thread: ThreadState;
-  modelLabel: string;
+  models: ModelInfo[] | undefined;
+  fallbackModelLabel: string;
+  onSettingsChange: (patch: Partial<AgentSettings>) => void;
 }
 
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-export function SessionView({ session, thread, modelLabel }: SessionViewProps) {
+export function SessionView({
+  session,
+  thread,
+  models,
+  fallbackModelLabel,
+  onSettingsChange,
+}: SessionViewProps) {
   const agentLabel = AGENT_LABELS[session.agent];
   return (
     <main className="flex min-w-0 flex-1 flex-col" aria-label={session.title}>
@@ -26,10 +34,17 @@ export function SessionView({ session, thread, modelLabel }: SessionViewProps) {
         footer={
           <Composer
             key={session.id}
+            sessionId={session.id}
+            agent={session.agent}
             agentLabel={agentLabel}
-            modelLabel={modelLabel}
-            effortLabel={session.effort ? capitalize(session.effort) : 'Default'}
-            permission={session.permission}
+            models={models}
+            settings={{
+              model: session.model,
+              effort: session.effort,
+              permission: session.permission,
+            }}
+            fallbackModelLabel={fallbackModelLabel}
+            onSettingsChange={onSettingsChange}
             running={thread.running}
             onSend={(text) =>
               void api.agent.send({ sessionId: session.id, text }).catch(() => undefined)

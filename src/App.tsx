@@ -72,20 +72,11 @@ export function App() {
     }),
   ) as Record<AgentId, string | null>;
 
-  const modelLabel = (() => {
-    if (!active) return '';
-    const list = s.models[active.agent];
-    if (active.model) {
-      return (
-        list?.find((m) => m.value === active.model)?.displayName ??
-        (active.model === DEFAULT_MODEL[active.agent].value
-          ? DEFAULT_MODEL[active.agent].label
-          : active.model)
-      );
-    }
-    // No model chosen: the agent's default (first in its list).
-    return list?.[0]?.displayName ?? DEFAULT_MODEL[active.agent].label;
-  })();
+  // Load the model list for the agent on screen (Welcome or the open session).
+  const shownAgent = active?.agent ?? s.agent;
+  useEffect(() => {
+    void loadModels(shownAgent);
+  }, [shownAgent, loadModels, s.accounts]);
 
   return (
     <div className="flex h-full flex-col">
@@ -122,7 +113,18 @@ export function App() {
           />
         ) : null}
         {active ? (
-          <SessionView key={active.id} session={active} thread={thread} modelLabel={modelLabel} />
+          <SessionView
+            key={active.id}
+            session={active}
+            thread={thread}
+            models={s.models[active.agent]}
+            fallbackModelLabel={
+              active.model === DEFAULT_MODEL[active.agent].value || !active.model
+                ? DEFAULT_MODEL[active.agent].label
+                : active.model
+            }
+            onSettingsChange={(patch) => void s.updateSession(active.id, patch)}
+          />
         ) : (
           <Welcome
             plans={plans}
@@ -130,6 +132,9 @@ export function App() {
             onAgentChange={s.setAgent}
             folder={folder}
             onChooseFolder={(at) => void (s.folders.length ? s.chooseFolder(at) : s.openFolder())}
+            models={s.models[s.agent]}
+            settings={s.welcome[s.agent]}
+            onSettingsChange={(patch) => s.setWelcomeSettings(s.agent, patch)}
             onStart={(o) =>
               void s.createSession({
                 prompt: o.text,

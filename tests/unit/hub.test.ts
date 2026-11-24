@@ -34,8 +34,16 @@ function stubAdapter() {
     },
     interrupt: async () => void calls.push('interrupt'),
     respondApproval: async (r, d) => void calls.push(`approve:${r}:${d}`),
-    setModel: async () => undefined,
-    setPermission: async () => undefined,
+    setModel: async () => {
+      calls.push('setModel');
+      return 'applied';
+    },
+    setEffort: async () => {
+      calls.push('setEffort');
+      return 'restart';
+    },
+    setPermission: async () => 'applied',
+    listCommands: async () => [],
     listModels: async () => [],
     readUsage: async () => null,
     isRunning: () => running,
@@ -144,6 +152,26 @@ describe('AgentHub', () => {
     const hub = new AgentHub({ store, adapters: {}, sink: () => undefined });
     await expect(hub.send(sessionId, 'x')).rejects.toThrow(/not available/);
     expect(store.events.list(sessionId).map((e) => e.type)).toEqual(['user.message', 'error']);
+  });
+});
+
+describe('AgentHub.updateSettings', () => {
+  it('applies model changes live and restarts for effort between turns', async () => {
+    const { adapter, calls, emit } = stubAdapter();
+    const hub = new AgentHub({ store, adapters: { claude: adapter }, sink: () => undefined });
+    await hub.send(sessionId, 'x');
+    await hub.updateSettings(sessionId, { model: 'sonnet' });
+    expect(store.sessions.get(sessionId)!.model).toBe('sonnet');
+    expect(calls).toContain('setModel');
+    expect(calls).not.toContain('close');
+
+    // Effort needs a restart: deferred while the turn runs, done when it ends.
+    await hub.updateSettings(sessionId, { effort: 'high' });
+    expect(calls).not.toContain('close');
+    emit({ t: 'turn.done', sessionId, turnId: 'T', status: 'completed', durationMs: 1 });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toContain('close');
+    expect(store.sessions.get(sessionId)!.effort).toBe('high');
   });
 });
 
