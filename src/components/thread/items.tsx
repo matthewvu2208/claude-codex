@@ -285,7 +285,11 @@ export function ReportedRow({ item }: { item: Extract<ThreadItem, { kind: 'repor
         ) : null}
       </button>
       {open ? (
-        <div className="ml-[26px] border-l border-border-card pl-3.5" data-report>
+        <div
+          className="ml-[26px] border-l border-border-card pl-3.5"
+          data-report
+          data-selectable="report"
+        >
           <Markdown text={item.report} />
         </div>
       ) : null}

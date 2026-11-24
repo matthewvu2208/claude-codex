@@ -14,8 +14,10 @@ import {
   WorkedRow,
 } from './items';
 import { Markdown } from './Markdown';
+import { SelectionToolbar } from './SelectionToolbar';
 
 interface ThreadProps {
+  sessionId: string;
   items: ThreadItem[];
   agentLabel: string;
   onDecide: (requestId: string, d: ApprovalDecision) => void;
@@ -45,7 +47,11 @@ function renderItem(
     case 'turn':
       return <WorkedRow item={item} />;
     case 'text':
-      return <Markdown text={item.text} />;
+      return (
+        <div data-selectable="assistant">
+          <Markdown text={item.text} />
+        </div>
+      );
     case 'approval':
       return (
         <ApprovalCard
@@ -68,6 +74,7 @@ const NEAR_BOTTOM = 48;
  * scroll up it stays put and shows "Jump to latest".
  */
 export function Thread({
+  sessionId,
   items,
   agentLabel,
   onDecide,
@@ -148,6 +155,13 @@ export function Thread({
         </div>
         <div className="sticky bottom-4 mt-auto w-full max-w-[860px] flex-none pb-4">{footer}</div>
       </div>
+      <SelectionToolbar
+        sessionId={sessionId}
+        scrollRef={scrollRef}
+        onAsked={() =>
+          document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')?.focus()
+        }
+      />
       {!atBottom ? (
         <button
           type="button"

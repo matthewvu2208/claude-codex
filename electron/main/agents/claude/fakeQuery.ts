@@ -175,6 +175,12 @@ export function fakeQuery(params: {
       await streamText(
         `Started ${results.length - refused.length}. Refused: ${refused.map((r) => r.error).join(' ')}`,
       );
+    } else if (lower.includes('list the problems')) {
+      await streamText(
+        'Two problems:\n\n1. `review-test/pricing.ts:11`: applyDiscount does not guard against NaN, so the price is NaN.\n2. `review-test/utils.ts:4`: round() drops negative zero.',
+      );
+    } else if (text.startsWith('> ')) {
+      await streamText(`You quoted ${text.split('\n\n').length - 1} passage(s).`);
     } else if (lower.includes('please review this folder')) {
       await streamText('Review: README.md looks fine. No problems found.');
     } else if (history.length > 0 && lower.includes('remember')) {

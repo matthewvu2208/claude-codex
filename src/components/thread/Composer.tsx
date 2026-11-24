@@ -1,9 +1,13 @@
-import { ArrowUp, Plus, Square } from 'lucide-react';
+import { ArrowUp, Plus, Square, X } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import type { AgentId } from '../../../shared/agents';
 import type { ModelInfo } from '../../../shared/events';
 import { AgentControls, type AgentSettings } from '../common/AgentControls';
 import { usePicker } from '../common/usePicker';
+import { composeMessage, type Quote } from '../../lib/quotes';
+import { useQuotes } from '../../stores/quotes';
+
+const NO_QUOTES: Quote[] = [];
 
 interface ComposerProps {
   sessionId: string;
@@ -37,10 +41,16 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const picker = usePicker({ textareaRef, text, setText, source: { sessionId }, agent });
 
+  const quotes = useQuotes((s) => s.bySession[sessionId] ?? NO_QUOTES);
+  const removeQuote = useQuotes((s) => s.remove);
+  const clearQuotes = useQuotes((s) => s.clear);
+
   const send = () => {
     if (!text.trim()) return;
-    onSend(text);
+    // Quotes go first as blockquotes with their labels, then the question.
+    onSend(composeMessage(quotes, text));
     setText('');
+    clearQuotes(sessionId);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -64,10 +74,32 @@ export function Composer({
       className="relative flex flex-col gap-2 rounded-[18px] border border-border-card bg-surface px-3.5 py-3 shadow-card focus-within:border-border-strong"
     >
       {picker.popover}
+      {quotes.map((q) => (
+        <div
+          key={q.id}
+          className="flex items-start gap-2.5 rounded-[10px] border-l-[3px] border-action bg-quote px-3 py-2.5"
+          data-testid="quote"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-[12px] text-secondary">{q.label}</span>
+            <span className="line-clamp-3 text-[14px] leading-normal">&ldquo;{q.text}&rdquo;</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Remove quote"
+            onClick={() => removeQuote(sessionId, q.id)}
+            className="flex size-8 flex-none items-center justify-center rounded-lg text-label hover:bg-raised"
+          >
+            <X size={16} aria-hidden />
+          </button>
+        </div>
+      ))}
       <textarea
         ref={textareaRef}
         aria-label="Message"
-        placeholder={`Reply to ${agentLabel}…`}
+        placeholder={
+          quotes.length ? `Ask ${agentLabel} about this selection…` : `Reply to ${agentLabel}…`
+        }
         rows={2}
         value={text}
         onChange={(e) => setText(e.target.value)}

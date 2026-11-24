@@ -30,6 +30,7 @@ export function SessionView({
   return (
     <main className="flex min-w-0 flex-1 flex-col" aria-label={session.title}>
       <Thread
+        sessionId={session.id}
         items={thread.items}
         agentLabel={agentLabel}
         resolveSession={resolveSession}
