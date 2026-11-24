@@ -6,13 +6,30 @@ import { seedDesignData } from '../fixtures/seed';
 import { launchApp } from './launch';
 
 /**
- * True when `child` is `parent` or inside it, comparing canonical paths (macOS temp folders are
- * reported as /private/var/... by git but /var/... by the app) on path boundaries, so
- * /a/repo-2 is not inside /a/repo.
+ * Canonical form of a path as the OS resolves it: macOS temp folders are /private/var/... in
+ * git's output but /var/... in the app, and on Windows git may print a different drive-letter
+ * case or a long name where Node has an 8.3 short name. realpathSync.native resolves all of it.
  */
+const canonical = (p: string) => realpathSync.native(p);
+
+/** Same folder, compared with the platform's own rules (case-insensitive on Windows). */
+const samePath = (a: string, b: string) => relative(canonical(a), canonical(b)) === '';
+
+/** True when `child` is `parent` or inside it, on path boundaries (/a/repo-2 is not in /a/repo). */
 function isInside(child: string, parent: string): boolean {
-  const rel = relative(realpathSync(parent), realpathSync(child));
+  const rel = relative(canonical(parent), canonical(child));
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/** `git worktree list --porcelain` as entries of path and branch. */
+function worktrees(cwd: string): { path: string; branch: string | null }[] {
+  return git(cwd, 'worktree', 'list', '--porcelain')
+    .split(/\r?\n\r?\n/)
+    .map((block) => ({
+      path: /^worktree (.+)$/m.exec(block)?.[1]?.trim() ?? '',
+      branch: /^branch refs\/heads\/(.+)$/m.exec(block)?.[1]?.trim() ?? null,
+    }))
+    .filter((w) => w.path);
 }
 
 const git = (cwd: string, ...args: string[]) =>
@@ -174,13 +191,18 @@ test('a worktree session leaves the main checkout untouched', async () => {
   await expect(log.getByText('in notes.txt')).toBeVisible();
 
   const appData = await app.evaluate(({ app: electronApp }) => electronApp.getPath('userData'));
-  const list = git(project, 'worktree', 'list', '--porcelain');
-  // Every worktree git knows about, other than the main checkout itself.
-  const others = [...list.matchAll(/^worktree (.+)$/gm)]
-    .map((m) => m[1]!.trim())
-    .filter((p) => realpathSync(p) !== realpathSync(project));
-  expect(others, list).toHaveLength(1);
-  const wtPath = others[0]!;
+  const list = worktrees(project);
+  const described = JSON.stringify(list);
+  // The main checkout is the entry on main, and it is the project folder.
+  const main = list.filter((w) => w.branch === 'main');
+  expect(main, described).toHaveLength(1);
+  expect(samePath(main[0]!.path, project), described).toBe(true);
+  // Exactly one other worktree: the session's, on its agent/ branch.
+  const children = list.filter((w) => w.branch?.startsWith('agent/'));
+  expect(children, described).toHaveLength(1);
+  expect(list, described).toHaveLength(2);
+  const wtPath = children[0]!.path;
+  expect(samePath(wtPath, project)).toBe(false);
   // It lives under <appData>/worktrees/<repo>/, and not inside the main checkout.
   expect(isInside(wtPath, join(appData, 'worktrees', 'repo')), `${wtPath} vs ${appData}`).toBe(
     true,
