@@ -6,13 +6,21 @@ import { titleFromPrompt, type Folder } from '../../../shared/models';
 import type { FolderRow, Store } from '../store/repositories';
 import type { AgentHub } from '../agents/hub';
 import type { AccountsService } from '../services/accounts';
+import { detectDevServers, type BrowserPanel } from '../services/browser';
+import { readPreview, resolveInside } from '../services/files';
 import {
   createWorktree,
+  gitCommit,
+  gitDiff,
+  gitStage,
+  gitStatus,
+  gitUnstage,
   listFiles,
   mergeWorktree,
   rankFiles,
   removeWorktree,
 } from '../services/git';
+import type { PtyManager } from '../services/pty';
 import type { Handlers } from './router';
 import { SettingsSchema } from '../../../shared/ipc';
 
@@ -39,6 +47,8 @@ export interface HandlerOptions {
   worktreeRoot: () => string;
   /** Sub-sessions still running under a session. */
   runningChildren?: (sessionId: string) => string[];
+  pty?: PtyManager;
+  browser?: BrowserPanel;
 }
 
 export function createHandlers(
@@ -185,6 +195,71 @@ export function createHandlers(
     },
 
     'agent:commands': ({ agent }) => hub.adapter(agent).listCommands(),
+
+    'fs:tree': async ({ sessionId }) => listFiles(sessionRoot({ sessionId })),
+    'fs:read': ({ sessionId, path }) => readPreview(sessionRoot({ sessionId }), path),
+    'fs:open': async ({ sessionId, path }) => {
+      const full = resolveInside(sessionRoot({ sessionId }), path);
+      const error = await shell.openPath(full);
+      if (error) throw new Error(error);
+      return null;
+    },
+
+    'git:status': async ({ sessionId }) => {
+      const root = sessionRoot({ sessionId });
+      return isGitRepo(root) ? gitStatus(root) : null;
+    },
+    'git:diff': ({ sessionId, path, staged }) => {
+      const root = sessionRoot({ sessionId });
+      resolveInside(root, path);
+      return gitDiff(root, path, staged);
+    },
+    'git:stage': async ({ sessionId, paths }) => {
+      const root = sessionRoot({ sessionId });
+      paths.forEach((p) => resolveInside(root, p));
+      await gitStage(root, paths);
+      return null;
+    },
+    'git:unstage': async ({ sessionId, paths }) => {
+      const root = sessionRoot({ sessionId });
+      paths.forEach((p) => resolveInside(root, p));
+      await gitUnstage(root, paths);
+      return null;
+    },
+    'git:commit': ({ sessionId, message }) => gitCommit(sessionRoot({ sessionId }), message),
+
+    'pty:create': ({ sessionId, cols, rows }) => {
+      if (!options.pty) throw new Error('Terminals are not available');
+      return options.pty.create(sessionId, sessionRoot({ sessionId }), cols, rows);
+    },
+    'pty:list': ({ sessionId }) => options.pty?.list(sessionId) ?? [],
+    'pty:write': ({ id, data }) => {
+      options.pty?.write(id, data);
+      return null;
+    },
+    'pty:resize': ({ id, cols, rows }) => {
+      options.pty?.resize(id, cols, rows);
+      return null;
+    },
+    'pty:kill': ({ id }) => {
+      options.pty?.kill(id);
+      return null;
+    },
+
+    'browser:show': ({ bounds, url }) => {
+      options.browser?.show(bounds, url);
+      return null;
+    },
+    'browser:hide': () => {
+      options.browser?.hide();
+      return null;
+    },
+    'browser:navigate': ({ url }) => options.browser?.navigate(url) ?? null,
+    'browser:action': ({ action }) => {
+      options.browser?.action(action);
+      return null;
+    },
+    'browser:devServers': () => detectDevServers(),
 
     'sessions:archive': ({ id }) => {
       store.sessions.archive(id);

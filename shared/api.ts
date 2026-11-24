@@ -29,6 +29,34 @@ export interface Api {
   };
   readonly fs: {
     files: Invoke<'fs:files'>;
+    tree: Invoke<'fs:tree'>;
+    read: Invoke<'fs:read'>;
+    open: Invoke<'fs:open'>;
+  };
+  readonly git: {
+    status: Invoke<'git:status'>;
+    diff: Invoke<'git:diff'>;
+    stage: Invoke<'git:stage'>;
+    unstage: Invoke<'git:unstage'>;
+    commit: Invoke<'git:commit'>;
+  };
+  readonly pty: {
+    create: Invoke<'pty:create'>;
+    list: Invoke<'pty:list'>;
+    write: Invoke<'pty:write'>;
+    resize: Invoke<'pty:resize'>;
+    kill: Invoke<'pty:kill'>;
+    /** Terminal output batches and exits; validate before use. */
+    onData: (cb: (batch: unknown) => void) => () => void;
+    onExit: (cb: (info: unknown) => void) => () => void;
+  };
+  readonly browser: {
+    show: Invoke<'browser:show'>;
+    hide: Invoke<'browser:hide'>;
+    navigate: Invoke<'browser:navigate'>;
+    action: Invoke<'browser:action'>;
+    devServers: Invoke<'browser:devServers'>;
+    onState: (cb: (state: unknown) => void) => () => void;
   };
   readonly agent: {
     commands: Invoke<'agent:commands'>;

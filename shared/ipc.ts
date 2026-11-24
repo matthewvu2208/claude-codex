@@ -89,6 +89,108 @@ export const ipcContract = {
       .refine((v) => !!v.sessionId !== !!v.folderId, 'Pass a session or a folder'),
     output: z.array(z.string()),
   },
+  // Right rail panels. Paths are relative to the session's folder (or worktree).
+  'fs:tree': { input: z.object({ sessionId: IdSchema }), output: z.array(z.string()) },
+  'fs:read': {
+    input: z.object({ sessionId: IdSchema, path: z.string().min(1).max(4096) }),
+    output: z.object({
+      content: z.string().nullable(),
+      binary: z.boolean(),
+      tooLarge: z.boolean(),
+      size: z.number(),
+    }),
+  },
+  /** Opens the file in the system's default app for it. */
+  'fs:open': {
+    input: z.object({ sessionId: IdSchema, path: z.string().min(1).max(4096) }),
+    output: z.null(),
+  },
+  'git:status': {
+    input: z.object({ sessionId: IdSchema }),
+    output: z
+      .object({
+        branch: z.string().nullable(),
+        ahead: z.number(),
+        behind: z.number(),
+        files: z.array(z.object({ path: z.string(), index: z.string(), workingDir: z.string() })),
+      })
+      .nullable(),
+  },
+  'git:diff': {
+    input: z.object({
+      sessionId: IdSchema,
+      path: z.string().min(1).max(4096),
+      staged: z.boolean(),
+    }),
+    output: z.string(),
+  },
+  'git:stage': {
+    input: z.object({
+      sessionId: IdSchema,
+      paths: z.array(z.string().min(1).max(4096)).min(1).max(1000),
+    }),
+    output: z.null(),
+  },
+  'git:unstage': {
+    input: z.object({
+      sessionId: IdSchema,
+      paths: z.array(z.string().min(1).max(4096)).min(1).max(1000),
+    }),
+    output: z.null(),
+  },
+  'git:commit': {
+    input: z.object({ sessionId: IdSchema, message: z.string().trim().min(1).max(10_000) }),
+    output: z.string(),
+  },
+  'pty:create': {
+    input: z.object({
+      sessionId: IdSchema,
+      cols: z.number().int().min(2).max(1000),
+      rows: z.number().int().min(2).max(1000),
+    }),
+    output: z.object({ id: z.string(), sessionId: z.string(), title: z.string() }),
+  },
+  'pty:list': {
+    input: z.object({ sessionId: IdSchema }),
+    output: z.array(z.object({ id: z.string(), sessionId: z.string(), title: z.string() })),
+  },
+  'pty:write': {
+    input: z.object({ id: z.string().max(64), data: z.string().max(100_000) }),
+    output: z.null(),
+  },
+  'pty:resize': {
+    input: z.object({
+      id: z.string().max(64),
+      cols: z.number().int().min(2).max(1000),
+      rows: z.number().int().min(2).max(1000),
+    }),
+    output: z.null(),
+  },
+  'pty:kill': { input: z.object({ id: z.string().max(64) }), output: z.null() },
+  'browser:show': {
+    input: z.object({
+      bounds: z.object({
+        x: z.number(),
+        y: z.number(),
+        width: z.number().min(0),
+        height: z.number().min(0),
+      }),
+      url: z.string().max(4096).optional(),
+    }),
+    output: z.null(),
+  },
+  'browser:hide': { input: z.undefined(), output: z.null() },
+  /** Returns the normalized URL, or null when it is not a web address. */
+  'browser:navigate': {
+    input: z.object({ url: z.string().max(4096) }),
+    output: z.string().nullable(),
+  },
+  'browser:action': {
+    input: z.object({ action: z.enum(['back', 'forward', 'reload']) }),
+    output: z.null(),
+  },
+  'browser:devServers': { input: z.undefined(), output: z.array(z.string()) },
+
   'agent:commands': {
     input: z.object({ agent: AgentIdSchema }),
     output: z.array(z.object({ name: z.string(), description: z.string() })),

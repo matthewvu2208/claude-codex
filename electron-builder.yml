@@ -15,6 +15,8 @@ npmRebuild: false
 # The Claude Code binary must be a real file to run.
 asarUnpack:
   - node_modules/@anthropic-ai/claude-agent-sdk-*/**
+  # node-pty loads its native module and runs spawn-helper (macOS) from disk.
+  - node_modules/node-pty/**
 mac:
   category: public.app-category.developer-tools
   target:

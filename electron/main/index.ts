@@ -7,6 +7,8 @@ import { registerIpc } from './ipc/router';
 import { openDatabase } from './store/db';
 import { createStore, type Store } from './store/repositories';
 import { createRuntime, type Runtime } from './runtime';
+import { BrowserPanel, browserContents } from './services/browser';
+import { PtyManager } from './services/pty';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -24,6 +26,7 @@ if (userDataOverride) app.setPath('userData', userDataOverride);
 let mainWindow: BrowserWindow | null = null;
 let store: Store | null = null;
 let runtime: Runtime | null = null;
+let ptys: PtyManager | null = null;
 const appUrl = () => mainWindow?.webContents.getURL() ?? '';
 
 function createWindow(): BrowserWindow {
@@ -67,6 +70,8 @@ function createWindow(): BrowserWindow {
 }
 
 app.on('web-contents-created', (_event, contents) => {
+  // The Browser panel shows web pages by design; its own guards live in services/browser.ts.
+  if (browserContents.has(contents)) return;
   // No remote content in app windows: block navigation, new windows and <webview>.
   contents.on('will-navigate', (event, url) => {
     if (!isAllowedNavigation(url, contents.getURL())) event.preventDefault();
@@ -87,8 +92,21 @@ void app.whenReady().then(() => {
 
   store = createStore(openDatabase(join(app.getPath('userData'), 'app.db')));
   runtime = createRuntime(store, () => mainWindow);
+  const send = (channel: string, payload: unknown) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+  };
+  ptys = new PtyManager(
+    (batch) => send('pty:data', batch),
+    (id, code) => send('pty:exit', { id, code }),
+  );
+  const browser = new BrowserPanel(
+    () => mainWindow,
+    (state) => send('browser:state', state),
+  );
   registerIpc(
     createHandlers(store, runtime.hub, runtime.accounts, {
+      pty: ptys,
+      browser,
       worktreeRoot: () => join(app.getPath('userData'), 'worktrees'),
       runningChildren: (id) => runtime?.orchestrator.runningChildren(id) ?? [],
     }),
@@ -115,6 +133,7 @@ app.on('before-quit', (event) => {
 });
 
 app.on('will-quit', () => {
+  ptys?.killAll();
   store?.db.close();
   store = null;
 });

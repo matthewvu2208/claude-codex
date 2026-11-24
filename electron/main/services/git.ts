@@ -141,3 +141,57 @@ export function rankFiles(files: string[], query: string, limit = 50): string[] 
     .slice(0, limit)
     .map(([, f]) => f);
 }
+
+export interface GitFile {
+  path: string;
+  /** Staged state letter (M, A, D, R, ?), or ' ' when nothing is staged. */
+  index: string;
+  /** Working tree state letter, or ' ' when clean. */
+  workingDir: string;
+}
+
+export interface GitStatus {
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  files: GitFile[];
+}
+
+export async function gitStatus(cwd: string): Promise<GitStatus> {
+  const s = await simpleGit(cwd).status();
+  return {
+    branch: s.current,
+    ahead: s.ahead,
+    behind: s.behind,
+    files: s.files.map((f) => ({ path: f.path, index: f.index, workingDir: f.working_dir })),
+  };
+}
+
+/** Diff of one file: staged (index vs HEAD) or unstaged (working tree vs index). */
+export async function gitDiff(cwd: string, path: string, staged: boolean): Promise<string> {
+  const git = simpleGit(cwd);
+  const diff = await git.diff([...(staged ? ['--cached'] : []), '--', path]);
+  if (diff || staged) return diff;
+  // Untracked files have no diff against the index; show them as new.
+  const untracked = await git.raw(['ls-files', '--others', '--exclude-standard', '--', path]);
+  return untracked.trim()
+    ? await git
+        .raw(['diff', '--no-index', '--', devNull(), path])
+        .catch((e: { message?: string }) => e.message ?? '')
+    : '';
+}
+
+const devNull = () => (process.platform === 'win32' ? 'NUL' : '/dev/null');
+
+export async function gitStage(cwd: string, paths: string[]): Promise<void> {
+  await simpleGit(cwd).add(paths);
+}
+
+export async function gitUnstage(cwd: string, paths: string[]): Promise<void> {
+  await simpleGit(cwd).raw(['restore', '--staged', '--', ...paths]);
+}
+
+export async function gitCommit(cwd: string, message: string): Promise<string> {
+  const r = await simpleGit(cwd).commit(message);
+  return r.commit;
+}

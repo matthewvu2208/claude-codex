@@ -15,6 +15,7 @@ import {
 } from './items';
 import { Markdown } from './Markdown';
 import { SelectionToolbar } from './SelectionToolbar';
+import { useRail } from '../../stores/rail';
 
 interface ThreadProps {
   sessionId: string;
@@ -121,6 +122,15 @@ export function Thread({
   useEffect(() => {
     scrollToEnd();
   }, [scrollToEnd]);
+
+  // Outline clicks scroll to an item.
+  const scrollTarget = useRail((r) => r.scrollTarget);
+  useEffect(() => {
+    if (!scrollTarget || scrollTarget.index >= items.length) return;
+    atBottomRef.current = false;
+    virtualizer.scrollToIndex(scrollTarget.index, { align: 'start' });
+    // Only new requests scroll, not new items.
+  }, [scrollTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">

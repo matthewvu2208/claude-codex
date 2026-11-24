@@ -11,6 +11,23 @@ import { api } from './lib/ipc';
 import { buildThread } from './lib/thread';
 import { useApp } from './stores/app';
 import { useThreads } from './stores/threads';
+import { Rail } from './components/rail/Rail';
+import { RightPane } from './components/rail/RightPane';
+import { OutlinePanel } from './components/rail/OutlinePanel';
+import { FilesPanel } from './components/rail/FilesPanel';
+import { GitPanel } from './components/rail/GitPanel';
+import { TerminalPanel } from './components/rail/TerminalPanel';
+import { BrowserPanel } from './components/rail/BrowserPanel';
+import { startTerminalRouter } from './lib/terminals';
+import { useRail } from './stores/rail';
+
+const PANEL_TITLES = {
+  outline: 'Outline',
+  browser: 'Browser',
+  files: 'Files',
+  git: 'Git',
+  terminal: 'Terminal',
+} as const;
 
 /** Main → renderer events: validate, then route to the thread log and session status. */
 function useAgentEvents() {
@@ -32,6 +49,8 @@ function useAgentEvents() {
 
 export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const panel = useRail((r) => r.panel);
+  useEffect(() => startTerminalRouter(() => useRail.getState().markTerminalOutput()), []);
   const s = useApp();
   const { load, refreshAccounts, loadModels } = s;
   useAgentEvents();
@@ -122,20 +141,36 @@ export function App() {
           />
         ) : null}
         {active ? (
-          <SessionView
-            key={active.id}
-            session={active}
-            thread={thread}
-            models={s.models[active.agent]}
-            fallbackModelLabel={
-              active.model === DEFAULT_MODEL[active.agent].value || !active.model
-                ? DEFAULT_MODEL[active.agent].label
-                : active.model
-            }
-            onSettingsChange={(patch) => void s.updateSession(active.id, patch)}
-            resolveSession={(id) => s.sessions.find((x) => x.id === id)}
-            onOpenSession={s.open}
-          />
+          <>
+            <SessionView
+              key={active.id}
+              session={active}
+              thread={thread}
+              models={s.models[active.agent]}
+              fallbackModelLabel={
+                active.model === DEFAULT_MODEL[active.agent].value || !active.model
+                  ? DEFAULT_MODEL[active.agent].label
+                  : active.model
+              }
+              onSettingsChange={(patch) => void s.updateSession(active.id, patch)}
+              resolveSession={(id) => s.sessions.find((x) => x.id === id)}
+              onOpenSession={s.open}
+            />
+            {panel ? (
+              <RightPane title={PANEL_TITLES[panel]}>
+                {panel === 'outline' ? <OutlinePanel items={thread.items} /> : null}
+                {panel === 'browser' ? <BrowserPanel /> : null}
+                {panel === 'files' ? <FilesPanel key={active.id} sessionId={active.id} /> : null}
+                {panel === 'git' ? (
+                  <GitPanel key={active.id} sessionId={active.id} refreshKey={active.status} />
+                ) : null}
+                {panel === 'terminal' ? (
+                  <TerminalPanel key={active.id} sessionId={active.id} />
+                ) : null}
+              </RightPane>
+            ) : null}
+            <Rail />
+          </>
         ) : (
           <Welcome
             plans={plans}

@@ -9,6 +9,14 @@ const invoke =
   (input?: unknown): Promise<never> =>
     ipcRenderer.invoke(channel, input) as Promise<never>;
 
+const subscribe =
+  (channel: string) =>
+  (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: unknown) => cb(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  };
+
 const platform: Platform =
   process.platform === 'darwin' || process.platform === 'win32' ? process.platform : 'linux';
 
@@ -30,6 +38,33 @@ const api: Api = {
   },
   fs: {
     files: invoke('fs:files'),
+    tree: invoke('fs:tree'),
+    read: invoke('fs:read'),
+    open: invoke('fs:open'),
+  },
+  git: {
+    status: invoke('git:status'),
+    diff: invoke('git:diff'),
+    stage: invoke('git:stage'),
+    unstage: invoke('git:unstage'),
+    commit: invoke('git:commit'),
+  },
+  pty: {
+    create: invoke('pty:create'),
+    list: invoke('pty:list'),
+    write: invoke('pty:write'),
+    resize: invoke('pty:resize'),
+    kill: invoke('pty:kill'),
+    onData: subscribe('pty:data'),
+    onExit: subscribe('pty:exit'),
+  },
+  browser: {
+    show: invoke('browser:show'),
+    hide: invoke('browser:hide'),
+    navigate: invoke('browser:navigate'),
+    action: invoke('browser:action'),
+    devServers: invoke('browser:devServers'),
+    onState: subscribe('browser:state'),
   },
   agent: {
     commands: invoke('agent:commands'),
