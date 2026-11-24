@@ -14,7 +14,7 @@ import { SettingsSchema } from '../../shared/ipc';
 import { AccountsService } from './services/accounts';
 import { API_KEY_SECRET } from './services/accounts';
 import { SecretStore } from './services/secrets';
-import type { Store } from './store/repositories';
+import { recoverInterruptedTurns, type Store } from './store/repositories';
 
 export interface Runtime {
   hub: AgentHub;
@@ -28,10 +28,7 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 
 /** Wires adapters, the hub and accounts. `getWindow` is read lazily for events and notifications. */
 export function createRuntime(store: Store, getWindow: () => BrowserWindow | null): Runtime {
-  // Sessions left running by a previous run are idle now; their agents resume on the next send.
-  store.db
-    .prepare("UPDATE sessions SET status = 'idle' WHERE status IN ('running', 'waiting')")
-    .run();
+  recoverInterruptedTurns(store);
 
   const secrets = new SecretStore(store.settings);
   // End-to-end tests swap in a scripted agent; never available in packaged builds.

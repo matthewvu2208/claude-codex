@@ -25,6 +25,8 @@ export function UserBubble({ text }: { text: string }) {
 
 function workedLabel(item: Extract<ThreadItem, { kind: 'turn' }>): string {
   if (item.running) return 'Working';
+  // A turn cut off by a quit has no duration.
+  if (item.status === 'interrupted' && !item.durationMs) return 'Stopped';
   const d = formatDuration(item.durationMs ?? 0);
   if (item.status === 'interrupted') return `Stopped after ${d}`;
   if (item.status === 'failed') return `Failed after ${d}`;

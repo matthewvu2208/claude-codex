@@ -231,6 +231,18 @@ export class EventsRepo {
     return { sessionId, seq, ts, type, payload };
   }
 
+  /** The id of the session's last turn if it never ended (the app quit or crashed mid-turn). */
+  openTurn(sessionId: string): string | null {
+    const row = this.db
+      .prepare(
+        "SELECT type, payload FROM events WHERE session_id = ? AND type IN ('turn.started', 'turn.done') ORDER BY seq DESC LIMIT 1",
+      )
+      .get(sessionId) as { type: string; payload: string } | undefined;
+    if (row?.type !== 'turn.started') return null;
+    const turnId = (JSON.parse(row.payload) as { turnId?: unknown } | null)?.turnId;
+    return typeof turnId === 'string' ? turnId : null;
+  }
+
   list(sessionId: string, afterSeq = 0): StoredEvent[] {
     const rows = this.db
       .prepare(
@@ -281,4 +293,28 @@ export function createStore(db: Db): Store {
     events: new EventsRepo(db),
     settings: new SettingsRepo(db),
   };
+}
+
+/**
+ * Sessions left running by a previous run are idle now (their agents resume on the next send),
+ * and a turn that never ended is closed as interrupted so the thread does not spin forever.
+ */
+export function recoverInterruptedTurns(store: Store): void {
+  store.db.transaction(() => {
+    for (const s of store.sessions.list()) {
+      const turnId = store.events.openTurn(s.id);
+      if (turnId) {
+        store.events.append(s.id, 'turn.done', {
+          t: 'turn.done',
+          sessionId: s.id,
+          turnId,
+          status: 'interrupted',
+          durationMs: 0,
+        });
+      }
+    }
+    store.db
+      .prepare("UPDATE sessions SET status = 'idle' WHERE status IN ('running', 'waiting')")
+      .run();
+  })();
 }

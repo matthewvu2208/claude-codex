@@ -6,6 +6,17 @@ const S = 'S';
 const e = (x: Record<string, unknown>) => ({ sessionId: S, ...x }) as AgentEvent;
 
 describe('buildThread', () => {
+  it('closes a turn cut off by a quit when the next turn starts', () => {
+    const t = buildThread([
+      e({ t: 'turn.started', turnId: 'T1' }),
+      e({ t: 'user.message', text: 'again' }),
+      e({ t: 'turn.started', turnId: 'T2' }),
+      e({ t: 'turn.done', turnId: 'T2', status: 'completed', durationMs: 5 }),
+    ]);
+    expect(t.running).toBe(false);
+    expect(t.items[0]).toMatchObject({ kind: 'turn', running: false, status: 'interrupted' });
+  });
+
   it('groups a turn: user bubble, Worked row with tools, then text', () => {
     const t = buildThread([
       e({ t: 'user.message', text: 'hi' }),

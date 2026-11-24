@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate, openDatabase } from '../../electron/main/store/db';
 import { migrations } from '../../electron/main/store/migrations';
-import { createStore, type Store } from '../../electron/main/store/repositories';
+import {
+  createStore,
+  recoverInterruptedTurns,
+  type Store,
+} from '../../electron/main/store/repositories';
 
 let store: Store;
 let folderId: string;
@@ -102,6 +106,29 @@ describe('EventsRepo', () => {
     store.events.append(a.id, 'x', null);
     store.db.prepare('DELETE FROM sessions WHERE id = ?').run(a.id);
     expect(store.events.list(a.id)).toEqual([]);
+  });
+});
+
+describe('recoverInterruptedTurns', () => {
+  it('closes a turn left open by a crash and resets running sessions', () => {
+    const open = newSession('open');
+    const done = newSession('done');
+    store.events.append(open.id, 'turn.started', { turnId: 'A' });
+    store.events.append(open.id, 'text.done', { itemId: 'x', text: 'half' });
+    store.sessions.update(open.id, { status: 'running' });
+    store.events.append(done.id, 'turn.started', { turnId: 'B' });
+    store.events.append(done.id, 'turn.done', { turnId: 'B', status: 'completed', durationMs: 1 });
+    expect(store.events.openTurn(open.id)).toBe('A');
+    expect(store.events.openTurn(done.id)).toBeNull();
+
+    recoverInterruptedTurns(store);
+    expect(store.events.openTurn(open.id)).toBeNull();
+    expect(store.events.list(open.id).at(-1)).toMatchObject({
+      type: 'turn.done',
+      payload: { turnId: 'A', status: 'interrupted' },
+    });
+    expect(store.events.list(done.id)).toHaveLength(2);
+    expect(store.sessions.get(open.id)!.status).toBe('idle');
   });
 });
 

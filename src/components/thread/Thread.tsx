@@ -115,9 +115,23 @@ export function Thread({
     ? `${items.length}:${lastItem.kind === 'text' ? lastItem.text.length : ''}`
     : '';
   const total = virtualizer.getTotalSize();
+  // Sending a message always brings the reader back to the latest.
+  // (The turn's first items often arrive in the same batch, so look a little way back.)
+  let lastUserKey: string | null = null;
+  for (let i = items.length - 1; i >= 0 && i >= items.length - 20; i--) {
+    if (items[i]!.kind === 'user') {
+      lastUserKey = items[i]!.key;
+      break;
+    }
+  }
+  useLayoutEffect(() => {
+    if (!lastUserKey) return;
+    atBottomRef.current = true;
+    setAtBottom(true);
+  }, [lastUserKey]);
   useLayoutEffect(() => {
     if (atBottomRef.current) scrollToEnd();
-  }, [tail, total, scrollToEnd]);
+  }, [tail, total, scrollToEnd, lastUserKey]);
 
   useEffect(() => {
     scrollToEnd();

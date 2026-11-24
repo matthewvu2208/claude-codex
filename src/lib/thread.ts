@@ -107,6 +107,11 @@ export function buildThread(
         items.push({ kind: 'user', key: `user:${items.length}`, text: e.text });
         break;
       case 'turn.started': {
+        // Turns run one at a time; one still open here was cut off (the app quit mid-turn).
+        if (current?.running) {
+          current.running = false;
+          current.status = 'interrupted';
+        }
         const turn: TurnItem = {
           kind: 'turn',
           key: `turn:${e.turnId}`,
