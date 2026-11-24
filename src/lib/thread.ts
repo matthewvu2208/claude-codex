@@ -1,3 +1,4 @@
+import type { Attachment } from '../../shared/attachments';
 import type { AgentEvent, ApprovalDecision, ToolKind } from '../../shared/events';
 
 export interface ToolLine {
@@ -8,7 +9,7 @@ export interface ToolLine {
 }
 
 export type ThreadItem =
-  | { kind: 'user'; key: string; text: string }
+  | { kind: 'user'; key: string; text: string; attachments?: Attachment[] }
   | {
       kind: 'turn';
       key: string;
@@ -104,7 +105,12 @@ export function buildThread(
         break;
       }
       case 'user.message':
-        items.push({ kind: 'user', key: `user:${items.length}`, text: e.text });
+        items.push({
+          kind: 'user',
+          key: `user:${items.length}`,
+          text: e.text,
+          ...(e.attachments?.length ? { attachments: e.attachments } : {}),
+        });
         break;
       case 'turn.started': {
         // Turns run one at a time; one still open here was cut off (the app quit mid-turn).

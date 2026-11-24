@@ -3,6 +3,9 @@ import type { ModelInfo } from '../../../shared/events';
 import type { Folder } from '../../../shared/models';
 import type { AgentSettings } from '../common/AgentControls';
 import { AgentCards } from './AgentCards';
+import { useState } from 'react';
+import type { AccountStatus } from '../../../shared/events';
+import { AgentSetupNotice, agentReady } from '../common/AgentSetupNotice';
 import { CommandBox } from './CommandBox';
 
 interface WelcomeProps {
@@ -14,7 +17,17 @@ interface WelcomeProps {
   models: ModelInfo[] | undefined;
   settings: AgentSettings;
   onSettingsChange: (patch: Partial<AgentSettings>) => void;
-  onStart: (opts: { agent: AgentId; text: string; worktree: boolean } & AgentSettings) => void;
+  account: AccountStatus | undefined;
+  onRecheckAccount: () => void;
+  onOpenAccounts: () => void;
+  onStart: (
+    opts: {
+      agent: AgentId;
+      text: string;
+      worktree: boolean;
+      attachments: string[];
+    } & AgentSettings,
+  ) => void;
 }
 
 /** Labels shown before an agent's model list has loaded. */
@@ -32,8 +45,12 @@ export function Welcome({
   models,
   settings,
   onSettingsChange,
+  account,
+  onRecheckAccount,
+  onOpenAccounts,
   onStart,
 }: WelcomeProps) {
+  const [tried, setTried] = useState(false);
   return (
     <main className="flex min-w-0 flex-1 flex-col items-center justify-center gap-9 overflow-y-auto px-8 py-14">
       <h1 className="m-0 text-center text-[44px] leading-[1.2] font-semibold">
@@ -41,6 +58,14 @@ export function Welcome({
       </h1>
       <AgentCards value={agent} plans={plans} onChange={onAgentChange} />
       <div className="flex w-full max-w-[1080px] flex-col gap-3.5">
+        <AgentSetupNotice
+          key={agent}
+          agent={agent}
+          status={account}
+          emphasize={tried}
+          onRecheck={onRecheckAccount}
+          onOpenAccounts={onOpenAccounts}
+        />
         <CommandBox
           key={agent}
           agent={agent}
@@ -53,6 +78,11 @@ export function Welcome({
           onSettingsChange={onSettingsChange}
           worktreeAvailable={folder?.isGitRepo ?? false}
           onStart={(t) => {
+            // Not signed in yet: keep the message and point at the sign-in notice.
+            if (account && !agentReady(account)) {
+              setTried(true);
+              return;
+            }
             // Fill in the model's own defaults when none was chosen.
             const model = settings.model ?? models?.[0]?.value ?? null;
             const effort =

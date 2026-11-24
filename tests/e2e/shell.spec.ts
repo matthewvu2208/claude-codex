@@ -71,6 +71,8 @@ test('agent cards act as a radio group', async () => {
 });
 
 test('every control is reachable by keyboard', async () => {
+  // Start is enabled once there is something to send.
+  await page.getByRole('textbox', { name: 'Task' }).fill('x');
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const seen: string[] = [];
   for (let i = 0; i < 60; i++) {
@@ -94,7 +96,7 @@ test('every control is reachable by keyboard', async () => {
     'Settings',
     'Workspace folder: session_test',
     'Task',
-    'Add context',
+    'Attach files',
     'Model: Opus 5.5',
     'Effort: Low',
     'Permission mode: Ask',
@@ -106,6 +108,7 @@ test('every control is reachable by keyboard', async () => {
     ).toBe(true);
   }
   expect(seen.some((n) => n.startsWith('Commands'))).toBe(true);
+  await page.getByRole('textbox', { name: 'Task' }).fill('');
   expect(
     seen.filter((n) => n.startsWith('Claude') || n.startsWith('Codex')).length,
   ).toBeGreaterThan(0);

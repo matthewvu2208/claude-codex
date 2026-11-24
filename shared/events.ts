@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AttachmentSchema } from './attachments';
 import { AgentIdSchema, SessionStatusSchema } from './models';
 
 const base = { sessionId: z.string() };
@@ -13,7 +14,12 @@ export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
  * app-level events the thread needs (user messages, approvals resolved, notices, status).
  */
 export const AgentEventSchema = z.discriminatedUnion('t', [
-  z.object({ t: z.literal('user.message'), ...base, text: z.string() }),
+  z.object({
+    t: z.literal('user.message'),
+    ...base,
+    text: z.string(),
+    attachments: z.array(AttachmentSchema).optional(),
+  }),
   z.object({ t: z.literal('turn.started'), ...base, turnId: z.string() }),
   z.object({ t: z.literal('text.delta'), ...base, itemId: z.string(), text: z.string() }),
   z.object({ t: z.literal('text.done'), ...base, itemId: z.string(), text: z.string() }),

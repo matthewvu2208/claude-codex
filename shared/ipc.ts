@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  AttachmentIdSchema,
+  AttachmentSchema,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS,
+} from './attachments';
 import { AccountStatusSchema, ApprovalDecisionSchema, ModelInfoSchema } from './events';
 import { UsageStateSchema } from './usage';
 import {
@@ -70,6 +76,8 @@ export const ipcContract = {
   'folders:choose': { input: z.object({ at: Point.optional() }), output: FolderSchema.nullable() },
   /** System folder picker. */
   'folders:open': { input: z.undefined(), output: FolderSchema.nullable() },
+  /** The app's own "Chats" folder, for conversations that need no project folder. */
+  'folders:chats': { input: z.undefined(), output: FolderSchema },
 
   'sessions:list': { input: z.undefined(), output: z.array(SessionSchema) },
   'sessions:create': {
@@ -232,9 +240,41 @@ export const ipcContract = {
     output: AccountStatusSchema,
   },
   'agent:models': { input: z.object({ agent: AgentIdSchema }), output: z.array(ModelInfoSchema) },
+  /** Text, attachments (ids from attachments:*), or both. */
   'agent:send': {
-    input: z.object({ sessionId: IdSchema, text: z.string().min(1).max(200_000) }),
+    input: z
+      .object({
+        sessionId: IdSchema,
+        text: z.string().max(200_000),
+        attachments: z.array(AttachmentIdSchema).max(MAX_ATTACHMENTS).optional(),
+      })
+      .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, {
+        message: 'Write a message or attach a file',
+      }),
     output: z.null(),
+  },
+
+  /** System file picker; copies the chosen files into the app's attachments folder. */
+  'attachments:pick': { input: z.undefined(), output: z.array(AttachmentSchema) },
+  /** Files dropped on the window (paths come from the preload's webUtils). */
+  'attachments:addPaths': {
+    input: z.object({ paths: z.array(z.string().min(1).max(4096)).min(1).max(MAX_ATTACHMENTS) }),
+    output: z.array(AttachmentSchema),
+  },
+  /** Pasted data such as a screenshot. */
+  'attachments:addData': {
+    input: z.object({
+      name: z.string().min(1).max(255),
+      data: z.instanceof(Uint8Array).refine((d) => d.byteLength <= MAX_ATTACHMENT_BYTES, {
+        message: 'File is too large',
+      }),
+    }),
+    output: AttachmentSchema,
+  },
+  /** Image attachments as data URLs for the conversation; null for other files. */
+  'attachments:preview': {
+    input: z.object({ id: AttachmentIdSchema }),
+    output: z.string().nullable(),
   },
   'agent:interrupt': { input: z.object({ sessionId: IdSchema }), output: z.null() },
   'agent:approve': {

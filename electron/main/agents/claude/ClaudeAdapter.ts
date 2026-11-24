@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import {
   createSdkMcpServer,
@@ -14,6 +15,7 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { Permission } from '../../../../shared/agents';
+import { attachedFilesNote } from '../../../../shared/attachments';
 import { HUB_TOOL_NAMES, HUB_TOOLS } from '../../../../shared/hubTools';
 import { claudeWindowLabel, toMs, utilizationPercent } from '../../../../shared/usage';
 import type {
@@ -94,6 +96,27 @@ export interface ClaudeAdapterDeps {
   /** `claude auth status` replacement for tests. */
   authStatus?: () => Promise<{ loggedIn: boolean; authMethod: string | null }>;
   binaryPath?: string | null;
+  /** Folder of attachment copies; Claude may read it like the session folder. */
+  attachmentsDir?: string;
+}
+
+/** The user message content: text, the attached-files note, and images as image blocks. */
+export function userContent(input: UserInput): SDKUserMessage['message']['content'] {
+  const files = input.attachments ?? [];
+  if (files.length === 0) return input.text;
+  const note = attachedFilesNote(files.filter((f) => f.kind === 'file'));
+  const text = [input.text.trim(), note].filter(Boolean).join('\n\n');
+  const images = files
+    .filter((f) => f.kind === 'image')
+    .map((f) => ({
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: f.mime as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+        data: readFileSync(f.path).toString('base64'),
+      },
+    }));
+  return [...images, ...(text ? [{ type: 'text' as const, text }] : [])];
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -300,6 +323,7 @@ export class ClaudeAdapter implements AgentAdapter {
     const options: Options = {
       ...this.baseOptions(),
       cwd: o.cwd,
+      ...(this.deps.attachmentsDir ? { additionalDirectories: [this.deps.attachmentsDir] } : {}),
       ...(o.model ? { model: o.model } : {}),
       ...(o.effort ? { effort: o.effort as NonNullable<Options['effort']> } : {}),
       permissionMode: PERMISSION_MODES[o.permission],
@@ -440,7 +464,7 @@ export class ClaudeAdapter implements AgentAdapter {
     }
     live.input.push({
       type: 'user',
-      message: { role: 'user', content: input.text },
+      message: { role: 'user', content: userContent(input) },
       parent_tool_use_id: null,
     });
   }

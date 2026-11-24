@@ -46,6 +46,7 @@ interface AppState {
     effort: string | null;
     permission: Permission;
     worktree: boolean;
+    attachments: string[];
   }) => Promise<Session | null>;
   rename: (id: string, title: string) => Promise<void>;
   archive: (id: string) => Promise<void>;
@@ -202,13 +203,23 @@ export const useApp = create<AppState>((set, get) => ({
     void api.settings.set({ lastFolderId: folder.id });
   },
 
-  createSession: async (o) => {
-    const { folderId, agent } = get();
-    if (!folderId) return null;
-    const session = await api.sessions.create({ folderId, agent, ...o });
+  createSession: async ({ attachments, ...o }) => {
+    const { agent } = get();
+    let { folderId } = get();
+    // No folder chosen: chat in the app's own Chats folder.
+    if (!folderId) {
+      const chats = await api.folders.chats();
+      folderId = chats.id;
+      set((s) => ({ folderId: chats.id, folders: upsertFolder(s.folders, chats) }));
+      void api.settings.set({ lastFolderId: chats.id });
+    }
+    const prompt = o.prompt.trim() || (attachments.length ? 'Attached files' : '');
+    const session = await api.sessions.create({ folderId, agent, ...o, prompt });
     set((s) => ({ sessions: [session, ...s.sessions], activeId: session.id }));
     // Errors (e.g. not signed in) arrive as thread events.
-    void api.agent.send({ sessionId: session.id, text: o.prompt }).catch(() => undefined);
+    void api.agent
+      .send({ sessionId: session.id, text: o.prompt, attachments })
+      .catch(() => undefined);
     return session;
   },
 

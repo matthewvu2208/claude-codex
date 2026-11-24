@@ -1,4 +1,5 @@
 import type { AgentId } from '../../../shared/agents';
+import type { StoredAttachment } from '../services/attachments';
 import { log } from '../services/log';
 import {
   PERSISTED_EVENTS,
@@ -129,13 +130,31 @@ export class AgentHub {
     if (nativeId !== session.nativeId) this.o.store.sessions.update(session.id, { nativeId });
   }
 
-  async send(sessionId: string, text: string): Promise<void> {
+  async send(sessionId: string, text: string, attachments: StoredAttachment[] = []): Promise<void> {
     const session = this.o.store.sessions.get(sessionId);
     if (!session) throw new Error('Unknown session');
-    this.record({ t: 'user.message', sessionId, text });
+    this.record({
+      t: 'user.message',
+      sessionId,
+      text,
+      ...(attachments.length
+        ? {
+            attachments: attachments.map(({ id, name, mime, size, kind }) => ({
+              id,
+              name,
+              mime,
+              size,
+              kind,
+            })),
+          }
+        : {}),
+    });
     try {
       await this.ensureStarted(session);
-      await this.adapter(session.agent).send(sessionId, { text });
+      await this.adapter(session.agent).send(sessionId, {
+        text,
+        ...(attachments.length ? { attachments } : {}),
+      });
     } catch (err) {
       this.record({
         t: 'error',

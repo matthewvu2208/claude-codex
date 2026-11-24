@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { describeAttachments } from '../fakeAttachments';
+
+const ATTACHED = '\u0001attached:';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -94,7 +97,10 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
     text: string,
   ) => {
     const lower = text.toLowerCase();
-    if (text.startsWith('<subsession_report')) {
+    if (text.startsWith(ATTACHED)) {
+      const [body, images] = text.slice(ATTACHED.length).split('\u0000');
+      await streamMessage(threadId, turnId, describeAttachments(body ?? '', Number(images)) ?? '');
+    } else if (text.startsWith('<subsession_report')) {
       const body = text.split('\n')[1] ?? '';
       await streamMessage(threadId, turnId, `The sub-session reported back. It said: ${body}`);
     } else if (lower.includes('review with claude') || lower.includes('review with codex')) {
@@ -324,7 +330,12 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
       }
       case 'turn/start': {
         const turnId = `turn_${randomUUID()}`;
-        const input = (p['input'] as { text?: string }[])[0]?.text ?? '';
+        const items = p['input'] as { type: string; text?: string }[];
+        const text = items.find((i) => i.type === 'text')?.text ?? '';
+        const images = items.filter((i) => i.type === 'localImage').length;
+        const input = describeAttachments(text, images)
+          ? `${ATTACHED}${text}\u0000${images}`
+          : text;
         const t = threads.get(String(p['threadId']));
         if (t && typeof p['model'] === 'string') t.model = p['model'];
         if (t && typeof p['effort'] === 'string') t.effort = p['effort'];

@@ -14,6 +14,7 @@ import { SettingsSchema } from '../../shared/ipc';
 import { AccountsService } from './services/accounts';
 import { API_KEY_SECRET } from './services/accounts';
 import { SecretStore } from './services/secrets';
+import { AttachmentStore } from './services/attachments';
 import { recoverInterruptedTurns, type Store } from './store/repositories';
 
 export interface Runtime {
@@ -22,6 +23,7 @@ export interface Runtime {
   claude: ClaudeAdapter;
   codex: CodexAdapter;
   orchestrator: Orchestrator;
+  attachments: AttachmentStore;
 }
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -31,6 +33,7 @@ export function createRuntime(store: Store, getWindow: () => BrowserWindow | nul
   recoverInterruptedTurns(store);
 
   const secrets = new SecretStore(store.settings);
+  const attachments = new AttachmentStore(join(app.getPath('userData'), 'attachments'));
   // End-to-end tests swap in a scripted agent; never available in packaged builds.
   const fake = !app.isPackaged && process.env['CLAUDE_CODEX_FAKE_AGENT'] === '1';
 
@@ -39,11 +42,16 @@ export function createRuntime(store: Store, getWindow: () => BrowserWindow | nul
     ...(fake
       ? {
           queryFn: fakeQuery as QueryFn,
-          authStatus: async () => ({ loggedIn: true, authMethod: 'fake' }),
+          // Tests can start signed out to check the sign-in notice.
+          authStatus: async () =>
+            process.env['CLAUDE_CODEX_FAKE_SIGNED_OUT'] === 'claude'
+              ? { loggedIn: false, authMethod: null }
+              : { loggedIn: true, authMethod: 'fake' },
           binaryPath: null,
         }
       : {}),
     env: () => accounts?.apiKeyEnv('claude', 'ANTHROPIC_API_KEY') ?? {},
+    attachmentsDir: attachments.root,
   });
 
   const codex = new CodexAdapter({
@@ -114,5 +122,5 @@ export function createRuntime(store: Store, getWindow: () => BrowserWindow | nul
     },
   });
 
-  return { hub, accounts, claude, codex, orchestrator };
+  return { hub, accounts, claude, codex, orchestrator, attachments };
 }

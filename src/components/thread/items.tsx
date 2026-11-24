@@ -12,13 +12,26 @@ import { AGENT_LABELS } from '../../../shared/agents';
 import type { ApprovalDecision } from '../../../shared/events';
 import type { Session } from '../../../shared/models';
 import { AgentIcon } from '../common/AgentIcon';
+import { SentAttachments } from '../common/Attachments';
+import type { Attachment } from '../../../shared/attachments';
 import { Markdown } from './Markdown';
 import { formatDuration, type ThreadItem, type ToolLine } from '../../lib/thread';
 
-export function UserBubble({ text }: { text: string }) {
+export function UserBubble({
+  text,
+  attachments,
+}: {
+  text: string;
+  attachments?: Attachment[] | undefined;
+}) {
   return (
-    <div className="max-w-[75%] self-end rounded-[14px] border border-border-card bg-bubble px-[18px] py-3 text-[15.5px] leading-[1.7] whitespace-pre-wrap">
-      {text}
+    <div className="flex flex-col gap-2">
+      {attachments?.length ? <SentAttachments items={attachments} /> : null}
+      {text ? (
+        <div className="max-w-[75%] self-end rounded-[14px] border border-border-card bg-bubble px-[18px] py-3 text-[15.5px] leading-[1.7] whitespace-pre-wrap">
+          {text}
+        </div>
+      ) : null}
     </div>
   );
 }

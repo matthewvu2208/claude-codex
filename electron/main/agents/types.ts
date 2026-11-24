@@ -1,4 +1,5 @@
 import type { HubToolResult } from '../../../shared/hubTools';
+import type { StoredAttachment } from '../services/attachments';
 import type { UsageSnapshot } from '../../../shared/usage';
 import type { AgentId, Permission } from '../../../shared/agents';
 import type {
@@ -28,6 +29,8 @@ export interface StartOptions {
 
 export interface UserInput {
   text: string;
+  /** App copies of attached files: images are shown to the agent, other files referenced. */
+  attachments?: StoredAttachment[];
 }
 
 export type ApplyResult = 'applied' | 'restart';

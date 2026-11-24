@@ -226,6 +226,9 @@ export function App() {
               onSettingsChange={(patch) => void s.updateSession(active.id, patch)}
               resolveSession={(id) => s.sessions.find((x) => x.id === id)}
               onOpenSession={s.open}
+              account={s.accounts[active.agent]}
+              onRecheckAccount={() => void refreshAccounts()}
+              onOpenAccounts={() => s.openSettings('accounts')}
             />
             {panel ? (
               <RightPane title={PANEL_TITLES[panel]}>
@@ -252,6 +255,9 @@ export function App() {
             models={s.models[s.agent]}
             settings={s.welcome[s.agent]}
             onSettingsChange={(patch) => s.setWelcomeSettings(s.agent, patch)}
+            account={s.accounts[s.agent]}
+            onRecheckAccount={() => void refreshAccounts()}
+            onOpenAccounts={() => s.openSettings('accounts')}
             onStart={(o) =>
               void s.createSession({
                 prompt: o.text,
@@ -259,6 +265,7 @@ export function App() {
                 effort: o.effort,
                 permission: o.permission,
                 worktree: o.worktree,
+                attachments: o.attachments,
               })
             }
           />

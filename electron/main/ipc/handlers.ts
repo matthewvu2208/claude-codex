@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { BrowserWindow, clipboard, dialog, Menu, shell, type IpcMainInvokeEvent } from 'electron';
 import type { SessionMenuAction } from '../../../shared/ipc';
@@ -22,6 +22,8 @@ import {
 } from '../services/git';
 import type { PtyManager } from '../services/pty';
 import type { UsageService } from '../services/usage';
+import type { AttachmentStore } from '../services/attachments';
+import { MAX_ATTACHMENTS } from '../../../shared/attachments';
 import type { Handlers } from './router';
 import { SettingsSchema, type Settings } from '../../../shared/ipc';
 
@@ -46,6 +48,10 @@ function popup(
 export interface HandlerOptions {
   /** Default home of session worktrees: <appData>/worktrees/<repo>/<session-slug>. */
   worktreeRoot: () => string;
+  /** Copies of attached files. */
+  attachments?: AttachmentStore;
+  /** The folder chats without a project run in. */
+  chatsRoot?: () => string;
   /** App version and log folder for Settings. */
   appInfo?: () => { version: string; logsPath: string };
   /** Called after settings change (e.g. to apply the text size). */
@@ -139,6 +145,12 @@ export function createHandlers(
     'folders:list': () => store.folders.list().map(toFolder),
 
     'folders:open': (_input, event) => openFolder(event),
+
+    'folders:chats': () => {
+      const root = options.chatsRoot?.() ?? join(worktreeRoot(), '..', 'chats');
+      mkdirSync(root, { recursive: true });
+      return toFolder(store.folders.upsert(root, 'Chats'));
+    },
 
     'folders:choose': async ({ at }, event) => {
       let chosen: Folder | null | 'open' = null;
@@ -356,10 +368,44 @@ export function createHandlers(
     },
     'agent:setApiKey': ({ agent, key }) => accounts.setApiKey(agent, key),
     'agent:models': ({ agent }) => hub.adapter(agent).listModels(),
-    'agent:send': async ({ sessionId, text }) => {
-      await hub.send(sessionId, text);
+    'agent:send': async ({ sessionId, text, attachments }) => {
+      const files = (attachments ?? []).map((id) => {
+        const a = options.attachments?.get(id);
+        if (!a) throw new Error('An attached file is no longer available. Attach it again.');
+        return a;
+      });
+      await hub.send(sessionId, text, files);
       return null;
     },
+
+    'attachments:pick': async (_input, event) => {
+      const store_ = options.attachments;
+      if (!store_) return [];
+      const window = BrowserWindow.fromWebContents(event.sender);
+      const opts: Electron.OpenDialogOptions = {
+        title: 'Attach files',
+        buttonLabel: 'Attach',
+        properties: ['openFile', 'multiSelections'],
+      };
+      const r = window
+        ? await dialog.showOpenDialog(window, opts)
+        : await dialog.showOpenDialog(opts);
+      if (r.canceled) return [];
+      return r.filePaths.slice(0, MAX_ATTACHMENTS).map((p) => store_.addPath(p));
+    },
+
+    'attachments:addPaths': ({ paths }) => {
+      const store_ = options.attachments;
+      if (!store_) return [];
+      return paths.map((p) => store_.addPath(p));
+    },
+
+    'attachments:addData': ({ name, data }) => {
+      if (!options.attachments) throw new Error('Attachments are not available');
+      return options.attachments.addData(name, data);
+    },
+
+    'attachments:preview': ({ id }) => options.attachments?.preview(id) ?? null,
     'agent:interrupt': async ({ sessionId }, event) => {
       await hub.interrupt(sessionId);
       const children = options.runningChildren?.(sessionId) ?? [];

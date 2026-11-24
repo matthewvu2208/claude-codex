@@ -44,7 +44,7 @@ function renderItem(
     case 'reported':
       return <ReportedRow item={item} />;
     case 'user':
-      return <UserBubble text={item.text} />;
+      return <UserBubble text={item.text} attachments={item.attachments} />;
     case 'turn':
       return <WorkedRow item={item} />;
     case 'text':

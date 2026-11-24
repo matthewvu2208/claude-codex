@@ -1,9 +1,10 @@
-import { ArrowUp, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, Paperclip, Square, X } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import type { AgentId } from '../../../shared/agents';
 import type { ModelInfo } from '../../../shared/events';
 import { AgentControls, type AgentSettings } from '../common/AgentControls';
 import { usePicker } from '../common/usePicker';
+import { AttachmentChips, useAttachments } from '../common/Attachments';
 import { composeMessage, type Quote } from '../../lib/quotes';
 import { useQuotes } from '../../stores/quotes';
 
@@ -18,7 +19,10 @@ interface ComposerProps {
   fallbackModelLabel: string;
   onSettingsChange: (patch: Partial<AgentSettings>) => void;
   running: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, attachments: string[]) => void;
+  /** The agent cannot answer yet (not signed in); sending keeps the message and calls this. */
+  blocked?: boolean;
+  onBlocked?: () => void;
   onStop: () => void;
 }
 
@@ -36,6 +40,8 @@ export function Composer({
   running,
   onSend,
   onStop,
+  blocked,
+  onBlocked,
 }: ComposerProps) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -45,11 +51,22 @@ export function Composer({
   const removeQuote = useQuotes((s) => s.remove);
   const clearQuotes = useQuotes((s) => s.clear);
 
+  const files = useAttachments();
+  const canSend = (text.trim().length > 0 || files.items.length > 0) && !files.busy;
+
   const send = () => {
-    if (!text.trim()) return;
+    if (!canSend) return;
+    if (blocked) {
+      onBlocked?.();
+      return;
+    }
     // Quotes go first as blockquotes with their labels, then the question.
-    onSend(composeMessage(quotes, text));
+    onSend(
+      text.trim() ? composeMessage(quotes, text) : '',
+      files.items.map((a) => a.id),
+    );
     setText('');
+    files.clear();
     clearQuotes(sessionId);
   };
 
@@ -71,9 +88,16 @@ export function Composer({
         e.preventDefault();
         send();
       }}
-      className="relative flex flex-col gap-2 rounded-[18px] border border-border-card bg-surface px-3.5 py-3 shadow-card focus-within:border-border-strong"
+      {...files.dropProps}
+      className={`relative flex flex-col gap-2 rounded-[18px] border bg-surface px-3.5 py-3 shadow-card focus-within:border-border-strong ${files.dragging ? 'border-action' : 'border-border-card'}`}
     >
       {picker.popover}
+      <AttachmentChips
+        items={files.items}
+        onRemove={files.remove}
+        busy={files.busy}
+        error={files.error}
+      />
       {quotes.map((q) => (
         <div
           key={q.id}
@@ -104,21 +128,19 @@ export function Composer({
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
+        onPaste={files.onPaste}
         {...picker.textareaProps}
         className="max-h-60 resize-none bg-transparent px-2 py-1.5 text-[16px] leading-normal text-primary outline-none focus-visible:outline-none [field-sizing:content]"
       />
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          aria-label="Add context"
-          title="Reference a file (@)"
-          onClick={() => {
-            setText((t) => `${t}${t && !/\s$/.test(t) ? ' ' : ''}@`);
-            requestAnimationFrame(() => textareaRef.current?.focus());
-          }}
+          aria-label="Attach files"
+          title="Attach files or images (or drop them here, or paste an image)"
+          onClick={files.pick}
           className="flex size-10 items-center justify-center rounded-[10px] text-label hover:bg-raised"
         >
-          <Plus size={20} strokeWidth={1.8} aria-hidden />
+          <Paperclip size={19} strokeWidth={1.8} aria-hidden />
         </button>
         <AgentControls
           agent={agent}
@@ -143,7 +165,7 @@ export function Composer({
           <button
             type="submit"
             aria-label="Send"
-            disabled={!text.trim()}
+            disabled={!canSend}
             className="flex size-12 items-center justify-center rounded-full bg-action text-on-action hover:brightness-110 disabled:opacity-50"
           >
             <ArrowUp size={20} strokeWidth={2.2} aria-hidden />

@@ -43,7 +43,8 @@ export function buildOutline(items: readonly ThreadItem[]): OutlineEntry[] {
   items.forEach((item, index) => {
     if (item.kind === 'user') {
       const first = item.text.split('\n').find((l) => l.trim() && !l.startsWith('>')) ?? item.text;
-      out.push({ index, label: first.trim().slice(0, 120), level: 0 });
+      const label = first.trim() || (item.attachments?.length ? 'Attached files' : '');
+      out.push({ index, label: label.slice(0, 120), level: 0 });
     } else if (item.kind === 'text') {
       for (const m of item.text.matchAll(/^#{1,3}\s+(.+)$/gm)) {
         out.push({ index, label: m[1]!.replace(/[*_`]/g, '').trim(), level: 1 });

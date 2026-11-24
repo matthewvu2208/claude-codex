@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { Api, Platform } from '../../shared/api';
 import type { IpcChannel } from '../../shared/ipc';
 
@@ -22,8 +22,22 @@ const platform: Platform =
 
 const api: Api = {
   app: { platform, info: invoke('app:info'), openLogs: invoke('app:openLogs') },
+  attachments: {
+    pick: invoke('attachments:pick'),
+    addPaths: invoke('attachments:addPaths'),
+    addData: invoke('attachments:addData'),
+    preview: invoke('attachments:preview'),
+    pathFor: (file: File) => {
+      try {
+        return webUtils.getPathForFile(file);
+      } catch {
+        return '';
+      }
+    },
+  },
   folders: {
     list: invoke('folders:list'),
+    chats: invoke('folders:chats'),
     choose: invoke('folders:choose'),
     open: invoke('folders:open'),
   },

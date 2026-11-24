@@ -17,10 +17,19 @@ export interface Api {
     info: Invoke<'app:info'>;
     openLogs: Invoke<'app:openLogs'>;
   };
+  readonly attachments: {
+    pick: Invoke<'attachments:pick'>;
+    addPaths: Invoke<'attachments:addPaths'>;
+    addData: Invoke<'attachments:addData'>;
+    preview: Invoke<'attachments:preview'>;
+    /** The path of a dropped file (Electron's webUtils), or '' when it has none. */
+    pathFor: (file: File) => string;
+  };
   readonly folders: {
     list: Invoke<'folders:list'>;
     choose: Invoke<'folders:choose'>;
     open: Invoke<'folders:open'>;
+    chats: Invoke<'folders:chats'>;
   };
   readonly sessions: {
     list: Invoke<'sessions:list'>;

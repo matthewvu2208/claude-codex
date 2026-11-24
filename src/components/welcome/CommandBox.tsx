@@ -1,9 +1,10 @@
-import { ArrowUp, ChevronDown, CornerDownLeft, Folder, Plus } from 'lucide-react';
+import { ArrowUp, ChevronDown, CornerDownLeft, Folder, Paperclip } from 'lucide-react';
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import type { AgentId } from '../../../shared/agents';
 import type { ModelInfo } from '../../../shared/events';
 import { AgentControls, type AgentSettings } from '../common/AgentControls';
 import { usePicker } from '../common/usePicker';
+import { AttachmentChips, useAttachments } from '../common/Attachments';
 
 interface CommandBoxProps {
   agent: AgentId;
@@ -15,7 +16,8 @@ interface CommandBoxProps {
   fallbackModelLabel: string;
   onSettingsChange: (patch: Partial<AgentSettings>) => void;
   worktreeAvailable: boolean;
-  onStart: (task: { text: string; worktree: boolean }) => void;
+  /** With no folder chosen, the session runs in the app's Chats folder. */
+  onStart: (task: { text: string; worktree: boolean; attachments: string[] }) => void;
 }
 
 const toolButton = 'h-9 rounded-lg px-3 text-[15px] text-row hover:bg-raised';
@@ -43,10 +45,17 @@ export function CommandBox({
     agent,
   });
 
+  const files = useAttachments();
+  const canStart = (text.trim().length > 0 || files.items.length > 0) && !files.busy;
+
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (!text.trim() || !folderName) return;
-    onStart({ text, worktree: worktree && worktreeAvailable });
+    if (!canStart) return;
+    onStart({
+      text,
+      worktree: worktree && worktreeAvailable,
+      attachments: files.items.map((a) => a.id),
+    });
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -60,7 +69,8 @@ export function CommandBox({
   return (
     <form
       onSubmit={submit}
-      className="relative flex flex-col rounded-[18px] border border-border-card bg-surface shadow-card"
+      {...files.dropProps}
+      className={`relative flex flex-col rounded-[18px] border bg-surface shadow-card ${files.dragging ? 'border-action' : 'border-border-card'}`}
       aria-label="New session"
     >
       <div className="flex flex-wrap items-center gap-5 border-b border-divider px-[18px] py-3">
@@ -98,14 +108,29 @@ export function CommandBox({
       </div>
       <div className="relative flex flex-col">
         {picker.popover}
+        {files.items.length || files.busy || files.error ? (
+          <div className="px-[18px] pt-3.5">
+            <AttachmentChips
+              items={files.items}
+              onRemove={files.remove}
+              busy={files.busy}
+              error={files.error}
+            />
+          </div>
+        ) : null}
         <textarea
           ref={textareaRef}
           aria-label="Task"
-          placeholder="Describe a task, or paste an error to debug..."
+          placeholder={
+            folderName
+              ? 'Describe a task, or paste an error to debug...'
+              : 'Ask anything, or open a folder to work on a project...'
+          }
           rows={3}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={files.onPaste}
           {...picker.textareaProps}
           className="resize-none bg-transparent px-[22px] pt-[18px] pb-1.5 text-[17px] leading-normal text-primary outline-none focus-visible:outline-none"
         />
@@ -113,15 +138,12 @@ export function CommandBox({
       <div className="flex flex-wrap items-center gap-1.5 px-3.5 pt-2 pb-3.5">
         <button
           type="button"
-          aria-label="Add context"
-          title="Reference a file (@)"
-          onClick={() => {
-            setText((t) => `${t}${t && !/\s$/.test(t) ? ' ' : ''}@`);
-            requestAnimationFrame(() => textareaRef.current?.focus());
-          }}
+          aria-label="Attach files"
+          title="Attach files or images (or drop them here, or paste an image)"
+          onClick={files.pick}
           className="flex size-10 items-center justify-center rounded-[10px] text-label hover:bg-raised"
         >
-          <Plus size={20} strokeWidth={1.8} aria-hidden />
+          <Paperclip size={19} strokeWidth={1.8} aria-hidden />
         </button>
         <AgentControls
           agent={agent}
@@ -140,8 +162,8 @@ export function CommandBox({
         <button
           type="submit"
           aria-label="Start session"
-          disabled={!folderName}
-          title={folderName ? undefined : 'Open a folder first'}
+          disabled={!canStart}
+          title={folderName ? undefined : 'Starts a chat in the Chats folder'}
           className="ml-2 flex size-12 items-center justify-center rounded-full bg-action text-on-action hover:brightness-110 disabled:opacity-50"
         >
           <ArrowUp size={20} strokeWidth={2.2} aria-hidden />

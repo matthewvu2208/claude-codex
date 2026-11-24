@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { describeAttachments } from '../fakeAttachments';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -108,7 +109,7 @@ export function fakeQuery(params: {
     return ok;
   };
 
-  const turn = async (text: string) => {
+  const turn = async (text: string, images = 0) => {
     const started = Date.now();
     interrupted = false;
     abort = new AbortController();
@@ -142,7 +143,10 @@ export function fakeQuery(params: {
       });
       return result;
     };
-    if (text.startsWith('<subsession_report')) {
+    const attached = describeAttachments(text, images);
+    if (attached) {
+      await streamText(attached);
+    } else if (text.startsWith('<subsession_report')) {
       const body = text.split('\n')[1] ?? '';
       await streamText(`The sub-session reported back. It said: ${body}`);
     } else if (lower.includes('review with codex') || lower.includes('review with claude')) {
@@ -251,7 +255,15 @@ export function fakeQuery(params: {
     for await (const msg of params.prompt) {
       if (closed) break;
       const content = msg.message.content;
-      await turn(typeof content === 'string' ? content : JSON.stringify(content));
+      if (typeof content === 'string') await turn(content);
+      else {
+        const blocks = content as { type: string; text?: string }[];
+        const text = blocks
+          .filter((b) => b.type === 'text')
+          .map((b) => b.text ?? '')
+          .join('\n');
+        await turn(text, blocks.filter((b) => b.type === 'image').length);
+      }
     }
     out.close();
   })();

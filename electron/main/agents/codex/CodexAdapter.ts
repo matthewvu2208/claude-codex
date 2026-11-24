@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { log } from '../../services/log';
+import { attachedFilesNote } from '../../../../shared/attachments';
+import type { UserInput as CodexUserInput } from './protocol/v2/UserInput';
 import type { Permission } from '../../../../shared/agents';
 import { HUB_TOOL_NAMES, HUB_TOOLS } from '../../../../shared/hubTools';
 import { codexWindowLabel, toMs } from '../../../../shared/usage';
@@ -121,6 +123,19 @@ const DECISIONS: Record<ApprovalDecision, string> = {
 };
 
 /** Codex through `codex app-server`: one process per app run, one thread per session. */
+/** Turn input: text plus the attached-files note, and images as local images. */
+export function codexInput(input: UserInput): CodexUserInput[] {
+  const files = input.attachments ?? [];
+  const note = attachedFilesNote(files.filter((f) => f.kind === 'file'));
+  const text = [input.text.trim(), note].filter(Boolean).join('\n\n');
+  return [
+    ...files
+      .filter((f) => f.kind === 'image')
+      .map((f) => ({ type: 'localImage' as const, path: f.path })),
+    ...(text ? [{ type: 'text' as const, text, text_elements: [] }] : []),
+  ];
+}
+
 export class CodexAdapter implements AgentAdapter {
   readonly id = 'codex' as const;
   private rpc: RpcClient | null = null;
@@ -480,7 +495,7 @@ export class CodexAdapter implements AgentAdapter {
     const thread = this.threads.get(sessionId);
     if (!thread) throw new Error('Session is not running');
     const rpc = await this.client();
-    const items = [{ type: 'text' as const, text: input.text, text_elements: [] }];
+    const items = codexInput(input);
     if (thread.activeTurnId) {
       await rpc.request('turn/steer', {
         threadId: thread.threadId,

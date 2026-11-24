@@ -154,6 +154,8 @@ void app.whenReady().then(() => {
       browser,
       worktreeRoot: () => join(app.getPath('userData'), 'worktrees'),
       appInfo: () => ({ version: app.getVersion(), logsPath: app.getPath('logs') }),
+      attachments: runtime.attachments,
+      chatsRoot: () => join(app.getPath('userData'), 'chats'),
       onSettingsChanged: (s) => applyTextSize(mainWindow, s),
       runningChildren: (id) => runtime?.orchestrator.runningChildren(id) ?? [],
     }),
