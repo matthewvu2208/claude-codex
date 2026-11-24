@@ -12,7 +12,11 @@ type Invoke<C extends IpcChannel> =
  * invoke channel in shared/ipc.ts, validated in main.
  */
 export interface Api {
-  readonly app: { readonly platform: Platform };
+  readonly app: {
+    readonly platform: Platform;
+    info: Invoke<'app:info'>;
+    openLogs: Invoke<'app:openLogs'>;
+  };
   readonly folders: {
     list: Invoke<'folders:list'>;
     choose: Invoke<'folders:choose'>;
@@ -78,5 +82,6 @@ export interface Api {
   readonly settings: {
     get: Invoke<'settings:get'>;
     set: Invoke<'settings:set'>;
+    chooseWorktreeRoot: Invoke<'settings:chooseWorktreeRoot'>;
   };
 }

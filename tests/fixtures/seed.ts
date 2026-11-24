@@ -77,3 +77,62 @@ export function seedDesignData(opts: { empty?: boolean } = {}): Seeded {
   store.db.close();
   return { userData, root, ids };
 }
+
+/**
+ * One session whose render log holds `count` stored events (M10 performance pass): turns
+ * with tools, markdown replies with code, usage and the occasional error.
+ */
+export function seedLongThread(count = 10_000): Seeded & { sessionId: string } {
+  const base = mkdtempSync(join(tmpdir(), 'claude-codex-e2e-'));
+  const userData = join(base, 'user-data');
+  const root = join(base, 'projects');
+  const path = join(root, 'long');
+  mkdirSync(userData, { recursive: true });
+  mkdirSync(path, { recursive: true });
+  const store = createStore(openDatabase(join(userData, 'app.db')));
+  const folder = store.folders.upsert(path, 'long');
+  const s = store.sessions.create({
+    folderId: folder.id,
+    agent: 'claude',
+    title: 'Long thread',
+    cwd: path,
+    permission: 'ask',
+  });
+  const add = (type: string, payload: Record<string, unknown>) =>
+    store.events.append(s.id, type, payload);
+  store.db.transaction(() => {
+    let n = 0;
+    for (let turn = 0; n < count; turn++) {
+      const T = `t${turn}`;
+      add('user.message', { text: `Question ${turn}: what does module ${turn % 37} do?` });
+      add('turn.started', { turnId: T });
+      n += 2;
+      for (let k = 0; k < 2 && n < count; k++, n += 2) {
+        add('tool.started', {
+          itemId: `${T}-tool${k}`,
+          kind: k ? 'command' : 'read',
+          title: k ? 'Run npm test' : `Read src/module${turn % 37}.ts`,
+        });
+        add('tool.done', { itemId: `${T}-tool${k}`, ok: true });
+      }
+      if (n >= count) break;
+      add('text.done', {
+        itemId: `${T}-text`,
+        text:
+          `## Answer ${turn}\n\nModule ${turn % 37} parses the **input** and returns a ` +
+          `result. Steps:\n\n1. Read the file\n2. Validate it\n3. Write the output\n\n` +
+          '```ts\nexport function run(x: number) {\n  return x * 2;\n}\n```\n',
+      });
+      add('usage', { contextTokens: 1000 + turn, contextMax: 200_000, costUsd: turn / 100 });
+      add('turn.done', { turnId: T, status: 'completed', durationMs: 1200 });
+      n += 3;
+      if (turn % 50 === 49 && n < count) {
+        add('error', { message: 'Claude is rate limited. Try again soon.', retryable: true });
+        n++;
+      }
+    }
+  })();
+  store.settings.set('lastFolderId', folder.id);
+  store.db.close();
+  return { userData, root, ids: { long: s.id }, sessionId: s.id };
+}

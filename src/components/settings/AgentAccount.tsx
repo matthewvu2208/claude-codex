@@ -1,15 +1,9 @@
-import { KeyRound, LogIn, RefreshCw, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { KeyRound, LogIn, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { AGENT_LABELS, type AgentId } from '../../../shared/agents';
 import type { AccountStatus } from '../../../shared/events';
 import { api } from '../../lib/ipc';
 import { AgentIcon } from '../common/AgentIcon';
-
-interface AccountsDialogProps {
-  accounts: Partial<Record<AgentId, AccountStatus>>;
-  onClose: () => void;
-  onChanged: () => void;
-}
 
 function describe(s: AccountStatus | undefined): string {
   if (!s) return 'Checking…';
@@ -21,7 +15,7 @@ function describe(s: AccountStatus | undefined): string {
   );
 }
 
-function AgentAccount({
+export function AgentAccount({
   agent,
   status,
   onChanged,
@@ -137,38 +131,5 @@ function AgentAccount({
         </p>
       ) : null}
     </section>
-  );
-}
-
-/** Settings › Accounts. Sign-in always goes through each vendor's own flow. */
-export function AccountsDialog({ accounts, onClose, onChanged }: AccountsDialogProps) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = ref.current;
-    if (d && !d.open) d.showModal();
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      aria-label="Accounts"
-      onClose={onClose}
-      className="m-auto w-[560px] max-w-[calc(100vw-32px)] rounded-2xl border border-border-card bg-surface p-0 text-primary shadow-card backdrop:bg-black/50"
-    >
-      <div className="flex items-center border-b border-divider px-5 py-3.5">
-        <h2 className="m-0 flex-1 text-[16px] font-normal">Accounts</h2>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={() => ref.current?.close()}
-          className="flex size-8 items-center justify-center rounded-lg text-secondary hover:bg-raised"
-        >
-          <X size={16} aria-hidden />
-        </button>
-      </div>
-      <div className="flex flex-col gap-3 p-5">
-        <AgentAccount agent="claude" status={accounts.claude} onChanged={onChanged} />
-        <AgentAccount agent="codex" status={accounts.codex} onChanged={onChanged} />
-      </div>
-    </dialog>
   );
 }

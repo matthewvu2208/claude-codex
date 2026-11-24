@@ -64,7 +64,7 @@ function FullAccessDialog({
       ref={ref}
       aria-label="Full access"
       onClose={onCancel}
-      className="m-auto w-[440px] max-w-[calc(100vw-32px)] rounded-2xl border border-border-card bg-surface p-5 text-primary shadow-card backdrop:bg-black/50"
+      className="m-auto w-[440px] max-w-[calc(100vw-32px)] rounded-2xl border border-border-card bg-surface p-5 text-primary shadow-card backdrop:bg-backdrop"
     >
       <div className="flex items-center gap-2.5">
         <ShieldAlert size={18} className="text-attention" aria-hidden />

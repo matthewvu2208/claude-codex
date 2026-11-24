@@ -12,6 +12,7 @@ interface TitleBarProps {
   center?: ReactNode;
   /** Meters shown before "Commands". */
   meters?: ReactNode;
+  onCommands?: () => void;
 }
 
 const iconButton =
@@ -24,6 +25,7 @@ export function TitleBar({
   canGoBack,
   center,
   meters,
+  onCommands,
 }: TitleBarProps) {
   return (
     <header
@@ -58,6 +60,8 @@ export function TitleBar({
       <span className="no-drag flex items-center gap-3.5">{meters}</span>
       <button
         type="button"
+        onClick={onCommands}
+        aria-haspopup="dialog"
         className="no-drag flex h-8 items-center gap-2 rounded-lg px-2.5 text-[13px] text-secondary hover:bg-raised"
       >
         Commands <Kbd>{shortcut('K')}</Kbd>

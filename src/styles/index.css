@@ -42,6 +42,7 @@
   --color-context-fill: var(--context-fill);
   --color-attention: var(--attention);
   --color-danger: var(--danger);
+  --color-backdrop: var(--backdrop);
   --color-diff-add: var(--diff-add);
   --color-diff-remove: var(--diff-remove);
   --color-rail: var(--rail-bg);
@@ -80,6 +81,17 @@ button {
   :focus-visible {
     outline: 2px solid var(--selection);
     outline-offset: 2px;
+  }
+
+  /* Spinners slow down instead of spinning fast when the system asks for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 2.4s !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 

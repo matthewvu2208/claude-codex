@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { AGENT_IDS, type AgentId, type Permission } from '../../shared/agents';
 import type { AccountStatus, ModelInfo } from '../../shared/events';
 import type { AgentSettings } from '../components/common/AgentControls';
+import type { SettingsTab } from '../components/settings/SettingsDialog';
 import type { Folder, Session, SessionStatus } from '../../shared/models';
 import { UsageStateSchema, type UsageState } from '../../shared/usage';
 import { api } from '../lib/ipc';
@@ -18,7 +19,8 @@ interface AppState {
   lastSessionId: string | null;
   accounts: Partial<Record<AgentId, AccountStatus>>;
   models: Partial<Record<AgentId, ModelInfo[]>>;
-  accountsOpen: boolean;
+  /** The open Settings tab, or null when Settings is closed. */
+  settingsTab: SettingsTab | null;
   /** Model, effort and permission the Welcome screen starts each agent with. */
   welcome: Record<AgentId, AgentSettings>;
   usage: UsageState;
@@ -30,7 +32,7 @@ interface AppState {
   updateSession: (id: string, patch: Partial<AgentSettings>) => Promise<void>;
   refreshAccounts: () => Promise<void>;
   loadModels: (agent: AgentId) => Promise<void>;
-  setAccountsOpen: (open: boolean) => void;
+  openSettings: (tab: SettingsTab | null) => void;
   setStatus: (id: string, status: SessionStatus) => void;
   reloadSessions: () => Promise<void>;
   goBack: () => void;
@@ -71,7 +73,7 @@ export const useApp = create<AppState>((set, get) => ({
   lastSessionId: null,
   accounts: {},
   models: {},
-  accountsOpen: false,
+  settingsTab: null,
   welcome: WELCOME_DEFAULTS,
   usage: { claude: null, codex: null },
   loadUsage: async (refresh) => {
@@ -136,7 +138,7 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 
-  setAccountsOpen: (accountsOpen) => set({ accountsOpen }),
+  openSettings: (settingsTab) => set({ settingsTab }),
 
   reloadSessions: async () => set({ sessions: await api.sessions.list() }),
 

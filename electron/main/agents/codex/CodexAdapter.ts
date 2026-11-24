@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { log } from '../../services/log';
 import type { Permission } from '../../../../shared/agents';
 import { HUB_TOOL_NAMES, HUB_TOOLS } from '../../../../shared/hubTools';
 import { codexWindowLabel, toMs } from '../../../../shared/usage';
@@ -204,8 +205,11 @@ export class CodexAdapter implements AgentAdapter {
         decision: 'cancelled',
       });
     }
-    if (this.stopping || this.threads.size === 0) return;
+    if (this.stopping) return;
+    log.warn('Codex app-server exited');
+    if (this.threads.size === 0) return;
     const delay = Math.min(30_000, 1000 * 2 ** this.restarts++);
+    log.info(`Restarting Codex app-server in ${delay} ms`);
     setTimeout(() => void this.reconnect(), delay).unref?.();
   }
 

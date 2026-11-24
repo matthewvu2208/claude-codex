@@ -34,6 +34,7 @@
   --on-action: #141518; /* Icon on the action button */
   --accent-codex-fill: rgb(123 147 255 / 0.22);
   --shadow-card: 0 18px 48px rgb(0 0 0 / 0.35);
+  --backdrop: rgb(0 0 0 / 0.5); /* Behind modal dialogs */
 
   /* Session view (artboard 2) */
   --bg-bubble: #22262e; /* User message */

@@ -10,6 +10,8 @@ import { createRuntime, type Runtime } from './runtime';
 import { BrowserPanel, browserContents } from './services/browser';
 import { PtyManager } from './services/pty';
 import { UsageService } from './services/usage';
+import { initLog, log } from './services/log';
+import { SettingsSchema, TEXT_SIZES, type Settings } from '../../shared/ipc';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -22,7 +24,13 @@ if (!app.commandLine.hasSwitch('no-sandbox')) app.enableSandbox();
 
 // Tests point the app at a throwaway data folder.
 const userDataOverride = process.env['CLAUDE_CODEX_USER_DATA'];
-if (userDataOverride) app.setPath('userData', userDataOverride);
+if (userDataOverride) {
+  app.setPath('userData', userDataOverride);
+  app.setAppLogsPath(join(userDataOverride, 'logs'));
+}
+
+process.on('uncaughtException', (e) => log.error('Uncaught exception', e));
+process.on('unhandledRejection', (e) => log.error('Unhandled rejection', e));
 
 let mainWindow: BrowserWindow | null = null;
 let store: Store | null = null;
@@ -30,6 +38,13 @@ let runtime: Runtime | null = null;
 let ptys: PtyManager | null = null;
 let usage: UsageService | null = null;
 const appUrl = () => mainWindow?.webContents.getURL() ?? '';
+
+/** Text size from Settings, applied as the window's zoom. */
+function applyTextSize(win: BrowserWindow | null, settings?: Settings) {
+  if (!win || win.isDestroyed() || !store) return;
+  const s = settings ?? SettingsSchema.parse(store.settings.all());
+  win.webContents.setZoomFactor(TEXT_SIZES[s.textSize ?? 'default']);
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -62,6 +77,10 @@ function createWindow(): BrowserWindow {
   });
 
   win.once('ready-to-show', () => win.show());
+  win.webContents.on('did-finish-load', () => applyTextSize(win));
+  win.webContents.on('render-process-gone', (_e, d) =>
+    log.error('Window renderer gone', { reason: d.reason, exitCode: d.exitCode }),
+  );
 
   if (devServerUrl) {
     void win.loadURL(devServerUrl);
@@ -86,6 +105,18 @@ app.on('web-contents-created', (_event, contents) => {
 });
 
 void app.whenReady().then(() => {
+  initLog(app.getPath('logs'), !app.isPackaged && !process.env['CI']);
+  log.info('App start', {
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    platform: process.platform,
+    arch: process.arch,
+    packaged: app.isPackaged,
+  });
+  app.on('child-process-gone', (_e, d) => {
+    if (d.reason !== 'clean-exit')
+      log.warn('Child process gone', { type: d.type, reason: d.reason, exitCode: d.exitCode });
+  });
   // Deny every permission (camera, notifications, …) until a feature asks for one.
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) =>
     callback(false),
@@ -122,6 +153,8 @@ void app.whenReady().then(() => {
       pty: ptys,
       browser,
       worktreeRoot: () => join(app.getPath('userData'), 'worktrees'),
+      appInfo: () => ({ version: app.getVersion(), logsPath: app.getPath('logs') }),
+      onSettingsChanged: (s) => applyTextSize(mainWindow, s),
       runningChildren: (id) => runtime?.orchestrator.runningChildren(id) ?? [],
     }),
     appUrl,

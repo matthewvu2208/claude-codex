@@ -11,6 +11,15 @@ import {
   TITLE_MAX,
 } from './models';
 
+export const TEXT_SIZES = {
+  small: 0.9,
+  default: 1,
+  large: 1.1,
+  larger: 1.25,
+} as const;
+export const TextSizeSchema = z.enum(['small', 'default', 'large', 'larger']);
+export type TextSize = z.infer<typeof TextSizeSchema>;
+
 /** Settings the renderer may read and write. */
 const AgentDefaultsSchema = z.object({
   model: z.string().max(200).optional(),
@@ -24,6 +33,17 @@ export const SettingsSchema = z.object({
   lastFolderId: IdSchema.optional(),
   /** Last model, effort and permission chosen per agent on the Welcome screen. */
   agentDefaults: z.partialRecord(AgentIdSchema, AgentDefaultsSchema).optional(),
+  /** Sub-sessions that may run at once under one session. */
+  subsessionLimit: z.number().int().min(1).max(5).optional(),
+  /** Where new worktrees go; null means the default under the app's data folder. */
+  worktreeRoot: z
+    .string()
+    .max(1000)
+    .regex(/^(\/|[A-Za-z]:[\\/])/, 'Must be an absolute path')
+    .nullable()
+    .optional(),
+  /** Text size for the whole window. */
+  textSize: TextSizeSchema.optional(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -229,6 +249,18 @@ export const ipcContract = {
   /** Plan usage for the sidebar card; `refresh` asks the agents that can be polled. */
   'usage:read': { input: z.object({ refresh: z.boolean() }), output: UsageStateSchema },
 
+  /** Version and folders shown in Settings. */
+  'app:info': {
+    input: z.undefined(),
+    output: z.object({
+      version: z.string(),
+      logsPath: z.string(),
+      defaultWorktreeRoot: z.string(),
+    }),
+  },
+  'app:openLogs': { input: z.undefined(), output: z.null() },
+  /** Picks the worktree folder with the system dialog and saves it; null when cancelled. */
+  'settings:chooseWorktreeRoot': { input: z.undefined(), output: z.string().nullable() },
   'settings:get': { input: z.undefined(), output: SettingsSchema },
   'settings:set': { input: SettingsSchema, output: SettingsSchema },
 } as const;

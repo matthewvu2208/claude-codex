@@ -23,7 +23,7 @@ import {
 import type { PtyManager } from '../services/pty';
 import type { UsageService } from '../services/usage';
 import type { Handlers } from './router';
-import { SettingsSchema } from '../../../shared/ipc';
+import { SettingsSchema, type Settings } from '../../../shared/ipc';
 
 const isGitRepo = (path: string) => existsSync(join(path, '.git'));
 const toFolder = (row: FolderRow): Folder => ({ ...row, isGitRepo: isGitRepo(row.path) });
@@ -44,8 +44,12 @@ function popup(
 }
 
 export interface HandlerOptions {
-  /** Where session worktrees live: <appData>/worktrees/<repo>/<session-slug>. */
+  /** Default home of session worktrees: <appData>/worktrees/<repo>/<session-slug>. */
   worktreeRoot: () => string;
+  /** App version and log folder for Settings. */
+  appInfo?: () => { version: string; logsPath: string };
+  /** Called after settings change (e.g. to apply the text size). */
+  onSettingsChanged?: (s: Settings) => void;
   /** Sub-sessions still running under a session. */
   runningChildren?: (sessionId: string) => string[];
   pty?: PtyManager;
@@ -59,6 +63,13 @@ export function createHandlers(
   accounts: AccountsService,
   options: HandlerOptions,
 ): Handlers {
+  /** The chosen worktree folder, or the default one. */
+  const worktreeRoot = () => {
+    const chosen = SettingsSchema.shape.worktreeRoot.safeParse(
+      store.settings.all()['worktreeRoot'],
+    );
+    return (chosen.success && chosen.data) || options.worktreeRoot();
+  };
   const confirm = async (
     event: IpcMainInvokeEvent,
     message: string,
@@ -162,7 +173,7 @@ export function createHandlers(
       // A worktree keeps the session's changes out of the main checkout.
       const worktree =
         input.worktree && isGitRepo(folder.path)
-          ? await createWorktree(folder.path, options.worktreeRoot(), title)
+          ? await createWorktree(folder.path, worktreeRoot(), title)
           : null;
       const session = store.sessions.create({
         folderId: folder.id,
@@ -374,11 +385,42 @@ export function createHandlers(
       return refresh ? options.usage.refresh() : options.usage.read();
     },
 
+    'app:info': () => ({
+      version: options.appInfo?.().version ?? '0.0.0',
+      logsPath: options.appInfo?.().logsPath ?? '',
+      defaultWorktreeRoot: options.worktreeRoot(),
+    }),
+
+    'app:openLogs': async () => {
+      const dir = options.appInfo?.().logsPath;
+      if (dir) await shell.openPath(dir);
+      return null;
+    },
+
+    'settings:chooseWorktreeRoot': async (_input, event) => {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      const options_: Electron.OpenDialogOptions = {
+        title: 'Choose where worktrees go',
+        buttonLabel: 'Choose',
+        properties: ['openDirectory', 'createDirectory'],
+      };
+      const r = window
+        ? await dialog.showOpenDialog(window, options_)
+        : await dialog.showOpenDialog(options_);
+      const path = r.canceled ? null : (r.filePaths[0] ?? null);
+      if (!path) return null;
+      store.settings.set('worktreeRoot', path);
+      options.onSettingsChanged?.(SettingsSchema.parse(store.settings.all()));
+      return path;
+    },
+
     'settings:get': () => SettingsSchema.parse(store.settings.all()),
 
     'settings:set': (patch) => {
       for (const [key, value] of Object.entries(patch)) store.settings.set(key, value);
-      return SettingsSchema.parse(store.settings.all());
+      const next = SettingsSchema.parse(store.settings.all());
+      options.onSettingsChanged?.(next);
+      return next;
     },
   };
 }

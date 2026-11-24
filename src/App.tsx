@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AGENT_IDS, type AgentId } from '../shared/agents';
 import { EventBatchSchema } from '../shared/events';
-import { AccountsDialog } from './components/settings/AccountsDialog';
+import { CommandPalette, type Command } from './components/common/CommandPalette';
+import { SettingsDialog } from './components/settings/SettingsDialog';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { SessionView } from './components/thread/SessionView';
 import { SessionMeters, SessionTitle } from './components/titlebar/SessionHeader';
@@ -19,7 +20,9 @@ import { GitPanel } from './components/rail/GitPanel';
 import { TerminalPanel } from './components/rail/TerminalPanel';
 import { BrowserPanel } from './components/rail/BrowserPanel';
 import { startTerminalRouter } from './lib/terminals';
-import { useRail } from './stores/rail';
+import { PANELS, useRail } from './stores/rail';
+import { isModKey } from './lib/shortcuts';
+import { shortcut } from './lib/platform';
 
 const PANEL_TITLES = {
   outline: 'Outline',
@@ -110,6 +113,68 @@ export function App() {
     void loadModels(shownAgent);
   }, [shownAgent, loadModels, s.accounts]);
 
+  // Commands (⌘K) and the global shortcuts.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const toggle = useRail((r) => r.toggle);
+  const commands: Command[] = [
+    { id: 'new', label: 'New session', keys: shortcut('N'), run: () => s.open(null) },
+    { id: 'folder', label: 'Open folder…', run: () => void s.openFolder() },
+    {
+      id: 'settings',
+      label: 'Settings',
+      keys: shortcut(','),
+      run: () => s.openSettings('general'),
+    },
+    { id: 'accounts', label: 'Accounts', run: () => s.openSettings('accounts') },
+    { id: 'shortcuts', label: 'Keyboard shortcuts', run: () => s.openSettings('shortcuts') },
+    {
+      id: 'sidebar',
+      label: sidebarOpen ? 'Hide sidebar' : 'Show sidebar',
+      run: () => setSidebarOpen((o) => !o),
+    },
+    ...(active
+      ? [
+          ...PANELS.map((p) => ({
+            id: `panel-${p}`,
+            label: `${panel === p ? 'Hide' : 'Show'} ${PANEL_TITLES[p]}`,
+            run: () => toggle(p),
+          })),
+          ...(thread.running
+            ? [
+                {
+                  id: 'stop',
+                  label: 'Stop the agent',
+                  keys: 'Esc',
+                  run: () => void api.agent.interrupt({ sessionId: active.id }),
+                },
+              ]
+            : []),
+          {
+            id: 'rename',
+            label: 'Rename session',
+            run: () => s.setRenaming(active.id),
+          },
+        ]
+      : []),
+  ];
+  const { open: openSession, openSettings } = s;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isModKey(e, 'k')) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      } else if (isModKey(e, 'n')) {
+        e.preventDefault();
+        openSession(null);
+      } else if (isModKey(e, ',')) {
+        e.preventDefault();
+        openSettings('general');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openSession, openSettings]);
+
   return (
     <div className="flex h-full flex-col">
       <TitleBar
@@ -128,6 +193,7 @@ export function App() {
           ) : undefined
         }
         meters={active ? <SessionMeters usage={thread.usage} /> : undefined}
+        onCommands={() => setPaletteOpen(true)}
       />
       <div className="flex min-h-0 flex-1">
         {sidebarOpen ? (
@@ -141,7 +207,7 @@ export function App() {
             onRename={(id, title) => void s.rename(id, title)}
             onSetRenaming={s.setRenaming}
             accounts={s.accounts}
-            onOpenSettings={() => s.setAccountsOpen(true)}
+            onOpenSettings={() => s.openSettings('accounts')}
             usage={s.usage}
           />
         ) : null}
@@ -198,12 +264,22 @@ export function App() {
           />
         )}
       </div>
-      {s.accountsOpen ? (
-        <AccountsDialog
+      {s.settingsTab ? (
+        <SettingsDialog
+          tab={s.settingsTab}
+          onTab={s.openSettings}
           accounts={s.accounts}
-          onClose={() => s.setAccountsOpen(false)}
-          onChanged={() => void refreshAccounts()}
+          onAccountsChanged={() => void refreshAccounts()}
+          defaultAgent={s.agent}
+          onDefaultAgent={s.setAgent}
+          defaults={s.welcome}
+          onDefaults={s.setWelcomeSettings}
+          models={s.models}
+          onClose={() => s.openSettings(null)}
         />
+      ) : null}
+      {paletteOpen ? (
+        <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />
       ) : null}
     </div>
   );

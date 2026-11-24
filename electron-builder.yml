@@ -1,4 +1,4 @@
-# App name, icon, signing and notarization are settled in M10.
+# Icon: build/icon.png (1024 px; converted to .icns and .ico). Signing: docs/RELEASING.md.
 appId: dev.claudecodex.app
 productName: Claude Codex
 copyright: Copyright © 2026
@@ -28,6 +28,9 @@ mac:
     - '!node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/**'
     - node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/**
   hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Signed builds notarize with -c.mac.notarize=true and the APPLE_* variables (RELEASING.md).
   notarize: false
 dmg:
   writeUpdateInfo: false

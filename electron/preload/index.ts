@@ -21,7 +21,7 @@ const platform: Platform =
   process.platform === 'darwin' || process.platform === 'win32' ? process.platform : 'linux';
 
 const api: Api = {
-  app: { platform },
+  app: { platform, info: invoke('app:info'), openLogs: invoke('app:openLogs') },
   folders: {
     list: invoke('folders:list'),
     choose: invoke('folders:choose'),
@@ -88,6 +88,7 @@ const api: Api = {
   settings: {
     get: invoke('settings:get'),
     set: invoke('settings:set'),
+    chooseWorktreeRoot: invoke('settings:chooseWorktreeRoot'),
   },
 };
 

@@ -1,4 +1,5 @@
 import type { AgentId } from '../../../shared/agents';
+import { log } from '../services/log';
 import {
   PERSISTED_EVENTS,
   type AgentEvent,
@@ -72,6 +73,10 @@ export class AgentHub {
     if (!session) return;
     const seq = PERSISTED_EVENTS.has(e.t) ? store.events.append(e.sessionId, e.t, e).seq : null;
     this.enqueue({ seq, e });
+    // Errors and failed turns go to the log file (message only, never the conversation).
+    if (e.t === 'error') log.warn(`${session.agent} session ${session.id}: ${e.message}`);
+    if (e.t === 'turn.done' && e.status === 'failed')
+      log.warn(`${session.agent} session ${session.id}: turn failed`);
 
     let status = NEXT_STATUS[e.t];
     if (e.t === 'turn.done') status = e.status === 'failed' ? 'error' : 'idle';
