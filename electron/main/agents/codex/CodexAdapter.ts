@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import type { Permission } from '../../../../shared/agents';
+import { HUB_TOOL_NAMES, HUB_TOOLS } from '../../../../shared/hubTools';
 import type {
   AccountStatus,
   AgentEvent,
@@ -8,6 +10,7 @@ import type {
 import type {
   AgentAdapter,
   ApplyResult,
+  HubTools,
   SlashCommandInfo,
   StartOptions,
   UsageSnapshot,
@@ -54,6 +57,14 @@ export function sandboxPolicy(mode: SandboxMode): SandboxPolicy {
   };
 }
 
+/** The hub tools as Codex dynamic tools (JSON Schema from the shared zod definitions). */
+export const HUB_DYNAMIC_TOOLS = HUB_TOOL_NAMES.map((name) => ({
+  type: 'function' as const,
+  name,
+  description: HUB_TOOLS[name].description,
+  inputSchema: z.toJSONSchema(HUB_TOOLS[name].input) as Record<string, unknown>,
+}));
+
 const PLAN_LABELS: Partial<Record<PlanType, string>> = {
   free: 'ChatGPT Free',
   go: 'ChatGPT Go',
@@ -90,6 +101,7 @@ interface Thread {
   effort: string | undefined;
   permission: Permission;
   activeTurnId: string | null;
+  hubTools: HubTools;
   /** Turns already finished, so a late turn/start response cannot mark one active again. */
   finishedTurns: Set<string>;
   mapper: CodexEventMapper;
@@ -278,10 +290,17 @@ export class CodexAdapter implements AgentAdapter {
       return { decision };
     }
     if (method === 'item/tool/call') {
-      // Hub tools arrive in M6; until then report that the tool is unavailable.
+      const name = String(params['tool']);
+      if (!thread || !(HUB_TOOL_NAMES as string[]).includes(name)) {
+        return {
+          contentItems: [{ type: 'inputText', text: `Unknown tool ${name}` }],
+          success: false,
+        };
+      }
+      const result = await thread.hubTools.call(name, params['arguments']);
       return {
-        contentItems: [{ type: 'inputText', text: 'This tool is not available.' }],
-        success: false,
+        contentItems: [{ type: 'inputText', text: JSON.stringify(result) }],
+        success: result.ok,
       };
     }
     // Anything else (token refresh, attestation, elicitation, user input) is declined so turns never hang.
@@ -412,6 +431,8 @@ export class CodexAdapter implements AgentAdapter {
           cwd: o.cwd,
           ...perms,
           ...(o.model ? { model: o.model } : {}),
+          // Thread-level; a resumed thread keeps the tools it started with.
+          dynamicTools: HUB_DYNAMIC_TOOLS as never,
         });
     const thread: Thread = {
       sessionId: o.sessionId,
@@ -421,6 +442,7 @@ export class CodexAdapter implements AgentAdapter {
       effort: o.effort,
       permission: o.permission,
       activeTurnId: null,
+      hubTools: o.hubTools,
       finishedTurns: new Set(),
       mapper: new CodexEventMapper(o.sessionId, o.cwd),
     };

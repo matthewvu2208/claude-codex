@@ -8,7 +8,7 @@ import {
 import type { Permission } from '../../../shared/agents';
 import type { Session, SessionStatus } from '../../../shared/models';
 import type { Store } from '../store/repositories';
-import type { AgentAdapter } from './types';
+import type { AgentAdapter, HubTools } from './types';
 
 export interface HubOptions {
   store: Store;
@@ -36,11 +36,27 @@ export class AgentHub {
   private readonly unsubscribers: (() => void)[] = [];
   /** Sessions whose agent restarts after the current turn to pick up a setting. */
   private readonly restartAfterTurn = new Set<string>();
+  private readonly observers = new Set<(e: AgentEvent, session: Session) => void>();
+  /** Supplies each session's hub tools (the orchestrator). */
+  hubToolsFor: (sessionId: string) => HubTools = () => ({
+    call: async () => ({ ok: false, error: 'Sub-sessions are not available.' }),
+  });
 
   constructor(private readonly o: HubOptions) {
     for (const adapter of Object.values(o.adapters)) {
       if (adapter) this.unsubscribers.push(adapter.onEvent((e) => this.record(e)));
     }
+  }
+
+  /** Called for every recorded event, after it is stored (the orchestrator listens here). */
+  observe(cb: (e: AgentEvent, session: Session) => void): () => void {
+    this.observers.add(cb);
+    return () => this.observers.delete(cb);
+  }
+
+  isRunning(sessionId: string): boolean {
+    const session = this.o.store.sessions.get(sessionId);
+    return !!session && !!this.adapterFor(session)?.isRunning(sessionId);
   }
 
   adapter(agent: AgentId): AgentAdapter {
@@ -69,6 +85,7 @@ export class AgentHub {
     }
     if (e.t === 'approval.request')
       this.o.notify?.(session, `${session.title} needs approval`, e.title);
+    for (const cb of this.observers) cb(e, this.o.store.sessions.get(session.id) ?? session);
     // A setting that needs a restart waits for the turn to end, then the next send resumes.
     if (e.t === 'turn.done' && this.restartAfterTurn.delete(session.id)) {
       void this.adapterFor(session)?.close(session.id);
@@ -102,7 +119,7 @@ export class AgentHub {
       ...(session.effort ? { effort: session.effort } : {}),
       permission: session.permission,
       ...(session.nativeId ? { resumeId: session.nativeId } : {}),
-      hubTools: {},
+      hubTools: this.hubToolsFor(session.id),
     });
     if (nativeId !== session.nativeId) this.o.store.sessions.update(session.id, { nativeId });
   }
@@ -122,6 +139,26 @@ export class AgentHub {
         retryable: true,
       });
       throw err;
+    }
+  }
+
+  /**
+   * Hands text to a session's agent without a user bubble (sub-session reports). The agent
+   * queues it as the next turn, or folds it into the running one.
+   */
+  async deliver(sessionId: string, text: string): Promise<void> {
+    const session = this.o.store.sessions.get(sessionId);
+    if (!session) return;
+    try {
+      await this.ensureStarted(session);
+      await this.adapter(session.agent).send(sessionId, { text });
+    } catch (err) {
+      this.record({
+        t: 'error',
+        sessionId,
+        message: err instanceof Error ? err.message : String(err),
+        retryable: true,
+      });
     }
   }
 

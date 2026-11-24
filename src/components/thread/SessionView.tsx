@@ -13,6 +13,8 @@ interface SessionViewProps {
   models: ModelInfo[] | undefined;
   fallbackModelLabel: string;
   onSettingsChange: (patch: Partial<AgentSettings>) => void;
+  resolveSession: (id: string) => Session | undefined;
+  onOpenSession: (id: string) => void;
 }
 
 export function SessionView({
@@ -21,6 +23,8 @@ export function SessionView({
   models,
   fallbackModelLabel,
   onSettingsChange,
+  resolveSession,
+  onOpenSession,
 }: SessionViewProps) {
   const agentLabel = AGENT_LABELS[session.agent];
   return (
@@ -28,6 +32,8 @@ export function SessionView({
       <Thread
         items={thread.items}
         agentLabel={agentLabel}
+        resolveSession={resolveSession}
+        onOpenSession={onOpenSession}
         onDecide={(requestId, decision) =>
           void api.agent.approve({ sessionId: session.id, requestId, decision })
         }

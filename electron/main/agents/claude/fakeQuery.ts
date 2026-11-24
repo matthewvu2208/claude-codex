@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type {
   CanUseTool,
   Options,
@@ -10,6 +10,7 @@ import type {
   SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { AsyncQueue } from '../asyncQueue';
+import { hubToolsForTest } from './ClaudeAdapter';
 
 /**
  * A scripted stand-in for Claude Code, used only by end-to-end tests (never in packaged builds).
@@ -113,7 +114,70 @@ export function fakeQuery(params: {
     abort = new AbortController();
     const cwd = options.cwd ?? process.cwd();
     const lower = text.toLowerCase();
-    if (history.length > 0 && lower.includes('remember')) {
+    const hubCall = async (name: string, args: Record<string, unknown>) => {
+      const id = `toolu_${randomUUID()}`;
+      emit({
+        type: 'assistant',
+        message: {
+          id: `msg_${randomUUID()}`,
+          role: 'assistant',
+          content: [{ type: 'tool_use', id, name: `mcp__hub__${name}`, input: args }],
+        },
+      });
+      const hub = hubToolsForTest.get(options);
+      const result = hub ? await hub.call(name, args) : { ok: false as const, error: 'no hub' };
+      emit({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: id,
+              content: JSON.stringify(result),
+              is_error: !result.ok,
+            },
+          ],
+        },
+      });
+      return result;
+    };
+    if (text.startsWith('<subsession_report')) {
+      const body = text.split('\n')[1] ?? '';
+      await streamText(`The sub-session reported back. It said: ${body}`);
+    } else if (lower.includes('review with codex') || lower.includes('review with claude')) {
+      const agent = lower.includes('with codex') ? 'codex' : 'claude';
+      const label = agent === 'codex' ? 'Codex' : 'Claude';
+      const r = await hubCall('start_subsession', {
+        agent,
+        title: `${label} review of ${basename(options.cwd ?? 'folder')} folder`,
+        prompt: 'Please review this folder and list any problems.',
+        access: 'read-only',
+      });
+      await streamText(
+        r.ok
+          ? `I started a ${label} review (read-only). It will report back here.`
+          : `I could not start the review: ${r.error}`,
+      );
+    } else if (lower.includes('start four reviews')) {
+      const results = [];
+      for (let i = 1; i <= 4; i++) {
+        results.push(
+          await hubCall('start_subsession', {
+            agent: 'codex',
+            title: `Review ${i}`,
+            prompt: 'take it slow',
+            access: 'read-only',
+          }),
+        );
+      }
+      const refused = results.filter((r) => !r.ok) as { ok: false; error: string }[];
+      await streamText(
+        `Started ${results.length - refused.length}. Refused: ${refused.map((r) => r.error).join(' ')}`,
+      );
+    } else if (lower.includes('please review this folder')) {
+      await streamText('Review: README.md looks fine. No problems found.');
+    } else if (history.length > 0 && lower.includes('remember')) {
       await streamText(
         `I remember ${history.length} earlier message${history.length === 1 ? '' : 's'}. The first was: ${history[0]}`,
       );

@@ -28,6 +28,7 @@ interface AppState {
   loadModels: (agent: AgentId) => Promise<void>;
   setAccountsOpen: (open: boolean) => void;
   setStatus: (id: string, status: SessionStatus) => void;
+  reloadSessions: () => Promise<void>;
   goBack: () => void;
   open: (id: string | null) => void;
   setAgent: (agent: AgentId) => void;
@@ -120,6 +121,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   setAccountsOpen: (accountsOpen) => set({ accountsOpen }),
+
+  reloadSessions: async () => set({ sessions: await api.sessions.list() }),
 
   setStatus: (id, status) =>
     set((s) => ({ sessions: s.sessions.map((x) => (x.id === id ? { ...x, status } : x)) })),

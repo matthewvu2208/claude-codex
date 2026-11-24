@@ -37,6 +37,8 @@ function popup(
 export interface HandlerOptions {
   /** Where session worktrees live: <appData>/worktrees/<repo>/<session-slug>. */
   worktreeRoot: () => string;
+  /** Sub-sessions still running under a session. */
+  runningChildren?: (sessionId: string) => string[];
 }
 
 export function createHandlers(
@@ -270,8 +272,19 @@ export function createHandlers(
       await hub.send(sessionId, text);
       return null;
     },
-    'agent:interrupt': async ({ sessionId }) => {
+    'agent:interrupt': async ({ sessionId }, event) => {
       await hub.interrupt(sessionId);
+      const children = options.runningChildren?.(sessionId) ?? [];
+      if (children.length > 0) {
+        const n = children.length;
+        const stop = await confirm(
+          event,
+          `Also stop ${n === 1 ? 'its sub-session' : `its ${n} sub-sessions`}?`,
+          'Sub-sessions keep running on their own and report back when they finish.',
+          n === 1 ? 'Stop sub-session' : 'Stop sub-sessions',
+        );
+        if (stop) await Promise.all(children.map((id) => hub.interrupt(id)));
+      }
       return null;
     },
     'agent:approve': async ({ sessionId, requestId, decision }) => {

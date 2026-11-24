@@ -3,9 +3,12 @@ import { AgentEventSchema, type AgentEvent, type EventEnvelope } from '../../sha
 import type { StoredEvent } from '../../shared/models';
 import { api } from '../lib/ipc';
 
+/** An event plus when it happened (stored time, or arrival time for live events). */
+export type TimedEnvelope = EventEnvelope & { ts?: number };
+
 interface SessionLog {
   loaded: boolean;
-  envelopes: EventEnvelope[];
+  envelopes: TimedEnvelope[];
   /** Highest render-log seq already held, so a live copy of a loaded event is skipped. */
   maxSeq: number;
 }
@@ -27,12 +30,12 @@ export function fromStored(s: StoredEvent): AgentEvent | null {
 }
 
 /** Merges the stored render log with live events that arrived before or after loading it. */
-export function mergeLog(stored: StoredEvent[], live: EventEnvelope[]): EventEnvelope[] {
+export function mergeLog(stored: StoredEvent[], live: TimedEnvelope[]): TimedEnvelope[] {
   const maxSeq = stored.reduce((m, s) => Math.max(m, s.seq), 0);
-  const fromLog: EventEnvelope[] = [];
+  const fromLog: TimedEnvelope[] = [];
   for (const s of stored) {
     const e = fromStored(s);
-    if (e) fromLog.push({ seq: s.seq, e });
+    if (e) fromLog.push({ seq: s.seq, e, ts: s.ts });
   }
   return [...fromLog, ...live.filter((env) => env.seq === null || env.seq > maxSeq)];
 }
@@ -50,7 +53,7 @@ export const useThreads = create<ThreadsState>((set, get) => ({
         if (env.seq !== null && env.seq <= log.maxSeq) continue;
         logs[id] = {
           ...log,
-          envelopes: [...log.envelopes, env],
+          envelopes: [...log.envelopes, { ...env, ts: Date.now() }],
           maxSeq: env.seq !== null ? env.seq : log.maxSeq,
         };
       }

@@ -18,6 +18,8 @@ import {
 } from '../../electron/main/agents/claude/mapEvents';
 import type { AgentEvent } from '../../shared/events';
 
+const noHub = { call: async () => ({ ok: false as const, error: 'unused' }) };
+
 const msg = (m: Record<string, unknown>) =>
   ({ parent_tool_use_id: null, uuid: 'u', session_id: 's', ...m }) as unknown as SDKMessage;
 
@@ -171,7 +173,7 @@ describe('ClaudeAdapter with the scripted agent', () => {
       sessionId: 'S',
       cwd,
       permission: 'ask',
-      hubTools: {},
+      hubTools: noHub,
     });
     expect(nativeId).toMatch(/[0-9a-f-]{36}/);
     await adapter.send('S', { text: 'hello' });
@@ -185,7 +187,7 @@ describe('ClaudeAdapter with the scripted agent', () => {
 
   it('asks for approval, and allow-once lets the edit run', async () => {
     const { cwd, adapter, until } = setup();
-    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: {} });
+    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: noHub });
     await adapter.send('S', { text: 'edit it' });
     const req = await until((e) => e.t === 'approval.request');
     if (req.t !== 'approval.request') throw new Error('unexpected');
@@ -198,7 +200,7 @@ describe('ClaudeAdapter with the scripted agent', () => {
 
   it('interrupts a running turn and cancels open approvals', async () => {
     const { cwd, adapter, until } = setup();
-    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: {} });
+    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: noHub });
     await adapter.send('S', { text: 'slow please' });
     await until((e) => e.t === 'text.delta');
     expect(adapter.isRunning('S')).toBe(true);
@@ -211,7 +213,7 @@ describe('ClaudeAdapter with the scripted agent', () => {
 
   it('queues a message sent during a turn as the next turn', async () => {
     const { cwd, adapter, until, events } = setup();
-    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: {} });
+    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: noHub });
     await adapter.send('S', { text: 'one' });
     await adapter.send('S', { text: 'two' });
     await until(

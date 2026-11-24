@@ -2,20 +2,44 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ApprovalDecision } from '../../../shared/events';
+import type { Session } from '../../../shared/models';
 import type { ThreadItem } from '../../lib/thread';
-import { ApprovalCard, ErrorRow, NoticeRow, UserBubble, WorkedRow } from './items';
+import {
+  ApprovalCard,
+  ErrorRow,
+  NoticeRow,
+  ReportedRow,
+  SubsessionCard,
+  UserBubble,
+  WorkedRow,
+} from './items';
 import { Markdown } from './Markdown';
 
 interface ThreadProps {
   items: ThreadItem[];
   agentLabel: string;
   onDecide: (requestId: string, d: ApprovalDecision) => void;
+  /** Looks up a sub-session for its card. */
+  resolveSession: (id: string) => Session | undefined;
+  onOpenSession: (id: string) => void;
   /** Rendered after the last item, inside the scroll area (the sticky composer). */
   footer: ReactNode;
 }
 
-function renderItem(item: ThreadItem, agentLabel: string, onDecide: ThreadProps['onDecide']) {
+function renderItem(
+  item: ThreadItem,
+  agentLabel: string,
+  onDecide: ThreadProps['onDecide'],
+  resolveSession: ThreadProps['resolveSession'],
+  onOpenSession: ThreadProps['onOpenSession'],
+) {
   switch (item.kind) {
+    case 'subsession':
+      return (
+        <SubsessionCard item={item} child={resolveSession(item.childId)} onOpen={onOpenSession} />
+      );
+    case 'reported':
+      return <ReportedRow item={item} />;
     case 'user':
       return <UserBubble text={item.text} />;
     case 'turn':
@@ -43,7 +67,14 @@ const NEAR_BOTTOM = 48;
  * Virtualized thread. Follows new content while the reader is at the bottom; once they
  * scroll up it stays put and shows "Jump to latest".
  */
-export function Thread({ items, agentLabel, onDecide, footer }: ThreadProps) {
+export function Thread({
+  items,
+  agentLabel,
+  onDecide,
+  resolveSession,
+  onOpenSession,
+  footer,
+}: ThreadProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
   const atBottomRef = useRef(true);
@@ -110,7 +141,7 @@ export function Thread({ items, agentLabel, onDecide, footer }: ThreadProps) {
                 className="absolute top-0 left-0 flex w-full flex-col pb-[22px]"
                 style={{ transform: `translateY(${v.start}px)` }}
               >
-                {renderItem(item, agentLabel, onDecide)}
+                {renderItem(item, agentLabel, onDecide, resolveSession, onOpenSession)}
               </div>
             );
           })}

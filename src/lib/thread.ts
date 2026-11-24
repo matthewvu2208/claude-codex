@@ -28,6 +28,8 @@ export type ThreadItem =
       detail: string;
       resolved?: ApprovalDecision | 'cancelled';
     }
+  | { kind: 'subsession'; key: string; childId: string; title: string; reported: boolean }
+  | { kind: 'reported'; key: string; childId: string; title: string; report: string; ts?: number }
   | { kind: 'error'; key: string; message: string }
   | { kind: 'notice'; key: string; message: string };
 
@@ -43,7 +45,11 @@ type TextItem = Extract<ThreadItem, { kind: 'text' }>;
 type ApprovalItem = Extract<ThreadItem, { kind: 'approval' }>;
 
 /** Folds a session's events, in order, into what the thread shows. */
-export function buildThread(events: readonly AgentEvent[]): ThreadState {
+export function buildThread(
+  events: readonly AgentEvent[],
+  /** Timestamps of stored events, by position, for "reported back · 8:14 PM". */
+  times?: readonly (number | undefined)[],
+): ThreadState {
   const items: ThreadItem[] = [];
   const texts = new Map<string, TextItem>();
   const turns = new Map<string, TurnItem>();
@@ -52,6 +58,7 @@ export function buildThread(events: readonly AgentEvent[]): ThreadState {
   const usage: ThreadState['usage'] = {};
   let current: TurnItem | null = null;
   let notice: string | null = null;
+  const cards = new Map<string, Extract<ThreadItem, { kind: 'subsession' }>>();
 
   const ensureTurn = (): TurnItem => {
     if (current) return current;
@@ -68,8 +75,34 @@ export function buildThread(events: readonly AgentEvent[]): ThreadState {
     return turn;
   };
 
-  for (const e of events) {
+  for (const [index, e] of events.entries()) {
     switch (e.t) {
+      case 'subsession.started': {
+        const card: Extract<ThreadItem, { kind: 'subsession' }> = {
+          kind: 'subsession',
+          key: `sub:${e.childId}`,
+          childId: e.childId,
+          title: e.summary ?? 'Sub-session',
+          reported: false,
+        };
+        cards.set(e.childId, card);
+        items.push(card);
+        break;
+      }
+      case 'subsession.reported': {
+        const card = cards.get(e.childId);
+        if (card) card.reported = true;
+        const ts = times?.[index];
+        items.push({
+          kind: 'reported',
+          key: `reported:${e.childId}:${items.length}`,
+          childId: e.childId,
+          title: card?.title ?? 'Sub-session',
+          report: e.summary ?? '',
+          ...(ts !== undefined ? { ts } : {}),
+        });
+        break;
+      }
       case 'user.message':
         items.push({ kind: 'user', key: `user:${items.length}`, text: e.text });
         break;

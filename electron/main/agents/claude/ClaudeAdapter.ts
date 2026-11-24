@@ -2,7 +2,9 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import {
+  createSdkMcpServer,
   query as sdkQuery,
+  tool,
   type CanUseTool,
   type Options,
   type PermissionMode,
@@ -12,6 +14,7 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { Permission } from '../../../../shared/agents';
+import { HUB_TOOL_NAMES, HUB_TOOLS } from '../../../../shared/hubTools';
 import type {
   AccountStatus,
   AgentEvent,
@@ -21,6 +24,7 @@ import type {
 import type {
   AgentAdapter,
   ApplyResult,
+  HubTools,
   SlashCommandInfo,
   StartOptions,
   UsageSnapshot,
@@ -29,6 +33,28 @@ import type {
 import { AsyncQueue } from '../asyncQueue';
 import { bundledClaudeBinary } from './binary';
 import { approvalContent, ClaudeEventMapper } from './mapEvents';
+
+/** Lets the scripted test agent call the hub tools it was given (same handlers Claude would). */
+export const hubToolsForTest = new WeakMap<object, HubTools>();
+
+/** The three hub tools as an in-process MCP server named "hub" (tools appear as mcp__hub__*). */
+export function hubMcpServer(hub: HubTools) {
+  return createSdkMcpServer({
+    name: 'hub',
+    version: '1.0.0',
+    tools: HUB_TOOL_NAMES.map((name) =>
+      tool(name, HUB_TOOLS[name].description, HUB_TOOLS[name].input.shape, async (args) => {
+        const result = await hub.call(name, args);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+          ...(result.ok ? {} : { isError: true }),
+        };
+      }),
+    ),
+  });
+}
+
+export const HUB_ALLOWED_TOOLS = HUB_TOOL_NAMES.map((n) => `mcp__hub__${n}`);
 
 export type QueryFn = (params: {
   prompt: AsyncIterable<SDKUserMessage>;
@@ -275,8 +301,12 @@ export class ClaudeAdapter implements AgentAdapter {
       includePartialMessages: true,
       settingSources: ['user', 'project', 'local'],
       systemPrompt: { type: 'preset', preset: 'claude_code' },
+      mcpServers: { hub: hubMcpServer(o.hubTools) },
+      // Starting a sub-session needs no approval card; the sub-session's own actions still do.
+      allowedTools: HUB_ALLOWED_TOOLS,
       ...(o.resumeId ? { resume: o.resumeId } : { sessionId: nativeId }),
     };
+    hubToolsForTest.set(options, o.hubTools);
     const q = this.queryFn({ prompt: input, options });
     const live: Live = {
       q,

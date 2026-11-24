@@ -1,6 +1,18 @@
-import { AlertCircle, ChevronRight, Loader2, ShieldAlert, Sparkle } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowUpRight,
+  ChevronRight,
+  CornerDownLeft,
+  Loader2,
+  ShieldAlert,
+  Sparkle,
+} from 'lucide-react';
 import { useState } from 'react';
+import { AGENT_LABELS } from '../../../shared/agents';
 import type { ApprovalDecision } from '../../../shared/events';
+import type { Session } from '../../../shared/models';
+import { AgentIcon } from '../common/AgentIcon';
+import { Markdown } from './Markdown';
 import { formatDuration, type ThreadItem, type ToolLine } from '../../lib/thread';
 
 export function UserBubble({ text }: { text: string }) {
@@ -169,6 +181,114 @@ export function NoticeRow({ message }: { message: string }) {
     <div role="status" className="flex items-center gap-2 text-[14px] text-muted">
       <Loader2 size={14} className="animate-spin" aria-hidden />
       {message}
+    </div>
+  );
+}
+
+const ACCESS_LABELS: Record<string, string> = {
+  ask: 'Ask',
+  'auto-edit': 'Auto-edit',
+  'read-only': 'Read-only',
+  full: 'Full access',
+};
+
+function StatusChip({ status }: { status: 'running' | 'waiting' | 'done' | 'failed' }) {
+  const styles = {
+    running: 'bg-raised text-secondary',
+    waiting: 'bg-raised text-attention',
+    done: 'bg-done-bg text-done-text',
+    failed: 'bg-raised text-danger',
+  }[status];
+  const label = { running: 'Running', waiting: 'Needs approval', done: 'Done', failed: 'Failed' }[
+    status
+  ];
+  return (
+    <span
+      className={`flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium ${styles}`}
+    >
+      {status === 'running' ? <Loader2 size={12} className="animate-spin" aria-hidden /> : null}
+      {label}
+    </span>
+  );
+}
+
+/** The card a parent thread shows for a sub-session (artboard 2). */
+export function SubsessionCard({
+  item,
+  child,
+  onOpen,
+}: {
+  item: Extract<ThreadItem, { kind: 'subsession' }>;
+  child: Session | undefined;
+  onOpen: (id: string) => void;
+}) {
+  const agent = child?.agent ?? 'codex';
+  const status = !child
+    ? 'done'
+    : child.status === 'waiting'
+      ? 'waiting'
+      : child.status === 'running'
+        ? 'running'
+        : child.status === 'error'
+          ? 'failed'
+          : item.reported
+            ? 'done'
+            : 'running';
+  const title = child?.title ?? item.title;
+  return (
+    <section
+      aria-label={`Sub-session: ${title}`}
+      className="flex flex-wrap items-center gap-3.5 rounded-xl border border-border-subsession bg-subsession px-4 py-3 text-[14px] leading-[1.4]"
+    >
+      <AgentIcon agent={agent} size={22} dotRing="var(--bg-subsession)" />
+      <span className="flex min-w-[200px] flex-1 flex-col gap-0.5">
+        <span className="font-semibold">{title}</span>
+        <span className="text-[12.5px] text-secondary">
+          Sub-session · {AGENT_LABELS[agent]}
+          {child ? ` · ${ACCESS_LABELS[child.permission] ?? child.permission}` : ''}
+        </span>
+      </span>
+      <StatusChip status={status} />
+      <button
+        type="button"
+        onClick={() => onOpen(item.childId)}
+        disabled={!child}
+        aria-label={`Open ${title}`}
+        className="flex items-center gap-1 rounded-md px-1 text-link hover:underline disabled:text-disabled"
+      >
+        Open
+        <ArrowUpRight size={14} aria-hidden />
+      </button>
+    </section>
+  );
+}
+
+const timeFormat = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
+
+/** "Codex review of session_test folder reported back · 8:14 PM", expandable to the report. */
+export function ReportedRow({ item }: { item: Extract<ThreadItem, { kind: 'reported' }> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2.5 text-left text-[15px] text-secondary hover:text-primary"
+      >
+        <CornerDownLeft size={16} strokeWidth={1.8} aria-hidden />
+        <span className="flex-1">
+          <span className="text-primary">{item.title}</span> reported back
+        </span>
+        {item.ts ? (
+          <span className="text-[13px] text-muted">{timeFormat.format(new Date(item.ts))}</span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="ml-[26px] border-l border-border-card pl-3.5" data-report>
+          <Markdown text={item.report} />
+        </div>
+      ) : null}
     </div>
   );
 }

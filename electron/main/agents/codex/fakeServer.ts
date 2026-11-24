@@ -68,12 +68,81 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
     notify('item/completed', { threadId, turnId, item: { type: 'agentMessage', id, text } });
   };
 
-  const runTurn = async (threadId: string, turnId: string, text: string) => {
+  /** Input steered into a running turn, answered before the turn completes (like Codex). */
+  const steered = new Map<string, string[]>();
+
+  const runTurn = async (threadId: string, turnId: string, firstText: string) => {
     const t = threads.get(threadId)!;
     const started = Date.now();
     notify('turn/started', { threadId, turn: { id: turnId, status: 'inProgress', items: [] } });
+    steered.set(turnId, [firstText]);
+    for (let text = firstText; ;) {
+      await respond(t, threadId, turnId, text);
+      const queue = steered.get(turnId)!;
+      queue.shift();
+      if (queue.length === 0 || interrupted.has(turnId)) break;
+      text = queue[0]!;
+    }
+    steered.delete(turnId);
+    finishTurn(t, threadId, turnId, started);
+  };
+
+  const respond = async (
+    t: { cwd: string; history: string[]; model: string; effort: string },
+    threadId: string,
+    turnId: string,
+    text: string,
+  ) => {
     const lower = text.toLowerCase();
-    if (lower.includes('remember') && t.history.length > 0) {
+    if (text.startsWith('<subsession_report')) {
+      const body = text.split('\n')[1] ?? '';
+      await streamMessage(threadId, turnId, `The sub-session reported back. It said: ${body}`);
+    } else if (lower.includes('review with claude') || lower.includes('review with codex')) {
+      const agent = lower.includes('with claude') ? 'claude' : 'codex';
+      const label = agent === 'claude' ? 'Claude' : 'Codex';
+      const id = `dyn_${randomUUID()}`;
+      const args = {
+        agent,
+        title: `${label} review of ${t.cwd.split(/[\\/]/).pop()} folder`,
+        prompt: 'Please review this folder and list any problems.',
+        access: 'read-only',
+      };
+      const item = {
+        type: 'dynamicToolCall',
+        id,
+        namespace: null,
+        tool: 'start_subsession',
+        arguments: args,
+        status: 'inProgress',
+        contentItems: null,
+        success: null,
+      };
+      notify('item/started', { threadId, turnId, item, startedAtMs: Date.now() });
+      const answer = await ask('item/tool/call', {
+        threadId,
+        turnId,
+        callId: id,
+        namespace: null,
+        tool: 'start_subsession',
+        arguments: args,
+      });
+      const ok = answer['success'] === true;
+      notify('item/completed', {
+        threadId,
+        turnId,
+        item: { ...item, status: 'completed', success: ok },
+      });
+      const textOut = (answer['contentItems'] as { text?: string }[] | undefined)?.[0]?.text ?? '';
+      await streamMessage(
+        threadId,
+        turnId,
+        ok
+          ? `I started a ${label} review (read-only). It will report back here.`
+          : `I could not start the review: ${textOut}`,
+      );
+    } else if (lower.includes('please review this folder')) {
+      await streamMessage(threadId, turnId, 'Review: README.md looks fine. No problems found.');
+    } else if (lower.includes('remember') && t.history.length > 0) {
       await streamMessage(
         threadId,
         turnId,
@@ -151,6 +220,14 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
     }
     t.history.push(text);
     writeFileSync(join(store, `${threadId}.json`), JSON.stringify(t.history));
+  };
+
+  const finishTurn = (
+    t: { history: string[] },
+    threadId: string,
+    turnId: string,
+    started: number,
+  ) => {
     notify('thread/tokenUsage/updated', {
       threadId,
       turnId,
@@ -254,8 +331,13 @@ export function createFakeAppServer(write: (line: string) => void): (line: strin
         setTimeout(() => void runTurn(String(p['threadId']), turnId, input), 0);
         return { turn: { id: turnId, status: 'inProgress', items: [] } };
       }
-      case 'turn/steer':
-        return { turnId: String(p['expectedTurnId']) };
+      case 'turn/steer': {
+        const turnId = String(p['expectedTurnId']);
+        const queue = steered.get(turnId);
+        if (!queue) throw new Error('no active turn');
+        queue.push((p['input'] as { text?: string }[])[0]?.text ?? '');
+        return { turnId };
+      }
       case 'turn/interrupt': {
         interrupted.add(String(p['turnId']));
         for (const [id, resolve] of waiting) {

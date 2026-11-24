@@ -22,6 +22,8 @@ function useAgentEvents() {
         useThreads.getState().ingest(parsed.data);
         for (const { e } of parsed.data) {
           if (e.t === 'session.status') useApp.getState().setStatus(e.sessionId, e.status);
+          // A new sub-session appears in the sidebar under its parent.
+          if (e.t === 'subsession.started') void useApp.getState().reloadSessions();
         }
       }),
     [],
@@ -63,7 +65,14 @@ export function App() {
       void loadModels(active.agent);
     }
   }, [active, loadThread, loadModels]);
-  const thread = useMemo(() => buildThread((log?.envelopes ?? []).map((env) => env.e)), [log]);
+  const thread = useMemo(
+    () =>
+      buildThread(
+        (log?.envelopes ?? []).map((env) => env.e),
+        (log?.envelopes ?? []).map((env) => env.ts),
+      ),
+    [log],
+  );
 
   const plans = Object.fromEntries(
     AGENT_IDS.map((agent) => {
@@ -124,6 +133,8 @@ export function App() {
                 : active.model
             }
             onSettingsChange={(patch) => void s.updateSession(active.id, patch)}
+            resolveSession={(id) => s.sessions.find((x) => x.id === id)}
+            onOpenSession={s.open}
           />
         ) : (
           <Welcome

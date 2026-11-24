@@ -1,3 +1,4 @@
+import type { HubToolResult } from '../../../shared/hubTools';
 import type { AgentId, Permission } from '../../../shared/agents';
 import type {
   AccountStatus,
@@ -6,8 +7,13 @@ import type {
   ModelInfo,
 } from '../../../shared/events';
 
-/** Sub-session tools every parent gets (docs/PLAN.md › Cross-agent sub-sessions). Filled in M6. */
-export type HubTools = Record<string, never>;
+/**
+ * Sub-session tools every session gets (docs/PLAN.md › Cross-agent sub-sessions), bound to the
+ * calling session. Adapters expose the tools in shared/hubTools.ts and route calls here.
+ */
+export interface HubTools {
+  call(name: string, args: unknown): Promise<HubToolResult>;
+}
 
 export interface StartOptions {
   sessionId: string; // our id

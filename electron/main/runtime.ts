@@ -7,6 +7,10 @@ import { fakeQuery } from './agents/claude/fakeQuery';
 import { CodexAdapter } from './agents/codex/CodexAdapter';
 import { findCodex, spawnAppServer } from './agents/codex/process';
 import { AgentHub } from './agents/hub';
+import { DEFAULT_CHILD_LIMIT, Orchestrator } from './agents/orchestrator';
+import { isGitRepo } from './services/git';
+import { simpleGit } from 'simple-git';
+import { SettingsSchema } from '../../shared/ipc';
 import { AccountsService } from './services/accounts';
 import { API_KEY_SECRET } from './services/accounts';
 import { SecretStore } from './services/secrets';
@@ -17,6 +21,7 @@ export interface Runtime {
   accounts: AccountsService;
   claude: ClaudeAdapter;
   codex: CodexAdapter;
+  orchestrator: Orchestrator;
 }
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -84,6 +89,27 @@ export function createRuntime(store: Store, getWindow: () => BrowserWindow | nul
     },
   });
 
+  const orchestrator = new Orchestrator({
+    store,
+    hub,
+    childLimit: () => {
+      const v = store.settings.all()['subsessionLimit'];
+      return typeof v === 'number' && v >= 1 && v <= 10 ? v : DEFAULT_CHILD_LIMIT;
+    },
+    defaults: (agent) => {
+      const d = SettingsSchema.safeParse(store.settings.all()).data?.agentDefaults?.[agent];
+      return { model: d?.model ?? (agent === 'claude' ? 'opus' : null), effort: d?.effort ?? null };
+    },
+    diffStat: async (cwd) => {
+      if (!isGitRepo(cwd)) return null;
+      try {
+        return await simpleGit(cwd).diff(['--stat']);
+      } catch {
+        return null;
+      }
+    },
+  });
+
   accounts = new AccountsService(hub, secrets, {
     claude: {
       command: () =>
@@ -91,5 +117,5 @@ export function createRuntime(store: Store, getWindow: () => BrowserWindow | nul
     },
   });
 
-  return { hub, accounts, claude, codex };
+  return { hub, accounts, claude, codex, orchestrator };
 }

@@ -90,6 +90,7 @@ void app.whenReady().then(() => {
   registerIpc(
     createHandlers(store, runtime.hub, runtime.accounts, {
       worktreeRoot: () => join(app.getPath('userData'), 'worktrees'),
+      runningChildren: (id) => runtime?.orchestrator.runningChildren(id) ?? [],
     }),
     appUrl,
   );

@@ -12,6 +12,8 @@ import { CodexEventMapper } from '../../electron/main/agents/codex/mapEvents';
 import { RpcClient, type Transport } from '../../electron/main/agents/codex/rpc';
 import type { AgentEvent } from '../../shared/events';
 
+const noHub = { call: async () => ({ ok: false as const, error: 'unused' }) };
+
 /** In-memory transport wired to the scripted app-server; `kill()` simulates a crash. */
 function fakeTransport() {
   const lineCbs: ((l: string) => void)[] = [];
@@ -207,7 +209,7 @@ describe('CodexAdapter with the scripted app-server', () => {
       sessionId: 'S',
       cwd,
       permission: 'ask',
-      hubTools: {},
+      hubTools: noHub,
     });
     expect(nativeId).toBeTruthy();
     await adapter.send('S', { text: 'read the readme' });
@@ -233,7 +235,7 @@ describe('CodexAdapter with the scripted app-server', () => {
 
   it('asks before a file change; accept applies it, decline does not', async () => {
     const { cwd, adapter, until, events } = setup();
-    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: {} });
+    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: noHub });
     await adapter.send('S', { text: 'edit notes' });
     const req = await until((e) => e.t === 'approval.request');
     if (req.t !== 'approval.request') throw new Error('unexpected');
@@ -255,7 +257,7 @@ describe('CodexAdapter with the scripted app-server', () => {
 
   it('interrupts a running turn', async () => {
     const { cwd, adapter, until } = setup();
-    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: {} });
+    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: noHub });
     await adapter.send('S', { text: 'go slow' });
     await until((e) => e.t === 'text.delta');
     expect(adapter.isRunning('S')).toBe(true);
@@ -270,7 +272,7 @@ describe('CodexAdapter with the scripted app-server', () => {
       sessionId: 'S',
       cwd,
       permission: 'ask',
-      hubTools: {},
+      hubTools: noHub,
     });
     await adapter.send('S', { text: 'hello' });
     await until((e) => e.t === 'turn.done');
@@ -282,7 +284,7 @@ describe('CodexAdapter with the scripted app-server', () => {
       sessionId: 'S',
       cwd,
       permission: 'ask',
-      hubTools: {},
+      hubTools: noHub,
       resumeId: nativeId,
     });
     await next.adapter.send('S', { text: 'do you remember?' });
@@ -295,7 +297,7 @@ describe('CodexAdapter with the scripted app-server', () => {
 
   it('ends the running turn when the process dies, then reconnects and resumes', async () => {
     const { cwd, adapter, until, transports, events } = setup();
-    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: {} });
+    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: noHub });
     await adapter.send('S', { text: 'slow' });
     await until((e) => e.t === 'text.delta');
     transports[0]!.kill();
