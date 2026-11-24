@@ -65,6 +65,15 @@ export function seedDesignData(opts: { empty?: boolean } = {}): Seeded {
       .run(at, at, s.id);
   }
   store.settings.set('lastFolderId', sessionTest.id);
+  // The design's usage card, stored as UsageService keeps the last report.
+  store.settings.set('usage:claude', {
+    agent: 'claude',
+    percent: 57,
+    window: 'Weekly · all models',
+    resetsAt: Date.now() + 3 * 86_400_000,
+    status: 'allowed',
+    updatedAt: Date.now(),
+  });
   store.db.close();
   return { userData, root, ids };
 }

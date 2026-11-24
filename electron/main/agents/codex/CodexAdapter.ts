@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Permission } from '../../../../shared/agents';
 import { HUB_TOOL_NAMES, HUB_TOOLS } from '../../../../shared/hubTools';
+import { codexWindowLabel, toMs } from '../../../../shared/usage';
 import type {
   AccountStatus,
   AgentEvent,
@@ -128,6 +129,8 @@ export class CodexAdapter implements AgentAdapter {
   private readonly approvals = new Map<string, PendingApproval>();
   private readonly listeners = new Set<(e: AgentEvent) => void>();
   private usage: UsageSnapshot | null = null;
+  private readonly usageListeners = new Set<(u: UsageSnapshot, raw: unknown) => void>();
+  private signedIn = false;
   private models: ModelInfo[] | null = null;
   private restarts = 0;
   private stopping = false;
@@ -320,14 +323,31 @@ export class CodexAdapter implements AgentAdapter {
 
   private setUsage(r: RateLimitSnapshot | null | undefined) {
     const w = r?.primary;
-    if (!w) return;
+    if (!r || !w) return;
     this.usage = {
       agent: 'codex',
-      percent: Math.round(w.usedPercent),
-      window: w.windowDurationMins ? String(w.windowDurationMins) : null,
-      resetsAt: w.resetsAt ?? null,
+      percent: Number.isFinite(w.usedPercent)
+        ? Math.min(100, Math.max(0, Math.round(w.usedPercent)))
+        : null,
+      window: codexWindowLabel(w.windowDurationMins),
+      resetsAt: toMs(w.resetsAt),
       status: r.rateLimitReachedType ?? null,
+      updatedAt: Date.now(),
     };
+    for (const cb of this.usageListeners) cb(this.usage, r);
+  }
+
+  onUsage(cb: (u: UsageSnapshot, raw: unknown) => void): () => void {
+    this.usageListeners.add(cb);
+    return () => this.usageListeners.delete(cb);
+  }
+
+  /** account/rateLimits/read; needs a ChatGPT sign-in, so it is skipped when signed out. */
+  async refreshUsage(): Promise<void> {
+    if (!this.signedIn) return;
+    const rpc = await this.client();
+    const r = await rpc.request<GetAccountRateLimitsResponse>('account/rateLimits/read', undefined);
+    this.setUsage(r.rateLimits);
   }
 
   async status(): Promise<AccountStatus> {
@@ -362,6 +382,7 @@ export class CodexAdapter implements AgentAdapter {
       }));
     }
     if (!account) return base;
+    this.signedIn = true;
     if (account.type === 'chatgpt') {
       void rpc
         .request<GetAccountRateLimitsResponse>('account/rateLimits/read', undefined)

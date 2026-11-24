@@ -220,6 +220,16 @@ export function fakeQuery(params: {
     history.push(text);
     writeFileSync(transcript, JSON.stringify(history));
     cost += 0.01;
+    // Plan usage arrives with replies, as rate_limit_event.
+    emit({
+      type: 'rate_limit_event',
+      rate_limit_info: {
+        status: 'allowed',
+        utilization: 0.57,
+        rateLimitType: 'seven_day',
+        resetsAt: Math.floor(Date.now() / 1000) + 3 * 86_400,
+      },
+    });
     emit({
       type: 'result',
       subtype: interrupted ? 'error_during_execution' : 'success',

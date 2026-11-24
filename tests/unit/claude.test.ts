@@ -226,6 +226,23 @@ describe('ClaudeAdapter with the scripted agent', () => {
     await adapter.close('S');
   });
 
+  it('turns rate-limit events into a usage snapshot', async () => {
+    const { cwd, adapter, until } = setup();
+    const seen: unknown[] = [];
+    adapter.onUsage((u) => seen.push(u));
+    await adapter.start({ sessionId: 'S', cwd, permission: 'ask', hubTools: noHub });
+    await adapter.send('S', { text: 'hello' });
+    await until((e) => e.t === 'turn.done');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(seen.at(-1)).toMatchObject({
+      agent: 'claude',
+      percent: 57,
+      window: 'Weekly · all models',
+      status: 'allowed',
+    });
+    await adapter.close('S');
+  });
+
   it('reports account status and models without reading tokens', async () => {
     const { adapter } = setup();
     const status = await adapter.status();

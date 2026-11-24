@@ -203,6 +203,18 @@ describe('CodexAdapter with the scripted app-server', () => {
     await adapter.closeAll();
   });
 
+  it('reads plan usage once signed in with ChatGPT', async () => {
+    const { adapter } = setup();
+    const seen: unknown[] = [];
+    adapter.onUsage((u) => seen.push(u));
+    await adapter.refreshUsage();
+    expect(seen).toHaveLength(0); // signed-out state: no request
+    await adapter.status();
+    await adapter.refreshUsage();
+    expect(seen.at(-1)).toMatchObject({ agent: 'codex', percent: 10, window: 'Weekly' });
+    await adapter.closeAll();
+  });
+
   it('runs a turn: command, streamed message, usage, completion', async () => {
     const { cwd, adapter, until, events } = setup();
     const { nativeId } = await adapter.start({

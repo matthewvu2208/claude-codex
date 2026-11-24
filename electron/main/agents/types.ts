@@ -1,4 +1,5 @@
 import type { HubToolResult } from '../../../shared/hubTools';
+import type { UsageSnapshot } from '../../../shared/usage';
 import type { AgentId, Permission } from '../../../shared/agents';
 import type {
   AccountStatus,
@@ -36,14 +37,7 @@ export interface SlashCommandInfo {
   description: string;
 }
 
-export interface UsageSnapshot {
-  agent: AgentId;
-  /** 0–100 */
-  percent: number | null;
-  window: string | null;
-  resetsAt: number | null;
-  status: string | null;
-}
+export type { UsageSnapshot } from '../../../shared/usage';
 
 export interface AgentAdapter {
   id: AgentId;
@@ -62,6 +56,10 @@ export interface AgentAdapter {
   listCommands(): Promise<SlashCommandInfo[]>;
   listModels(): Promise<ModelInfo[]>;
   readUsage(): Promise<UsageSnapshot | null>;
+  /** Plan usage changes; `raw` is the vendor payload (for the opt-in usage log only). */
+  onUsage(cb: (usage: UsageSnapshot, raw: unknown) => void): () => void;
+  /** Asks the agent for fresh usage when it can be polled (Codex); Claude only reports with replies. */
+  refreshUsage?(): Promise<void>;
   isRunning(sessionId: string): boolean;
   close(sessionId: string): Promise<void>;
   /** Stops every session and any agent process (app quit). */

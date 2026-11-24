@@ -9,6 +9,7 @@ import { createStore, type Store } from './store/repositories';
 import { createRuntime, type Runtime } from './runtime';
 import { BrowserPanel, browserContents } from './services/browser';
 import { PtyManager } from './services/pty';
+import { UsageService } from './services/usage';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -27,6 +28,7 @@ let mainWindow: BrowserWindow | null = null;
 let store: Store | null = null;
 let runtime: Runtime | null = null;
 let ptys: PtyManager | null = null;
+let usage: UsageService | null = null;
 const appUrl = () => mainWindow?.webContents.getURL() ?? '';
 
 function createWindow(): BrowserWindow {
@@ -103,8 +105,20 @@ void app.whenReady().then(() => {
     () => mainWindow,
     (state) => send('browser:state', state),
   );
+  usage = new UsageService({
+    adapters: { claude: runtime.claude, codex: runtime.codex },
+    settings: store.settings,
+    push: (state) => send('usage:changed', state),
+    // Opt-in M9 spike: raw rate-limit payloads, one JSON object per line.
+    spikeLog:
+      process.env['CLAUDE_CODEX_LOG_USAGE'] === '1'
+        ? join(app.getPath('userData'), 'usage-spike.jsonl')
+        : null,
+  });
+  usage.start();
   registerIpc(
     createHandlers(store, runtime.hub, runtime.accounts, {
+      usage,
       pty: ptys,
       browser,
       worktreeRoot: () => join(app.getPath('userData'), 'worktrees'),
@@ -134,6 +148,7 @@ app.on('before-quit', (event) => {
 
 app.on('will-quit', () => {
   ptys?.killAll();
+  usage?.stop();
   store?.db.close();
   store = null;
 });

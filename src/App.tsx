@@ -51,6 +51,10 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const panel = useRail((r) => r.panel);
   useEffect(() => startTerminalRouter(() => useRail.getState().markTerminalOutput()), []);
+  useEffect(() => {
+    void useApp.getState().loadUsage(false);
+    return api.usage.onChange((raw) => useApp.getState().setUsage(raw));
+  }, []);
   const s = useApp();
   const { load, refreshAccounts, loadModels } = s;
   useAgentEvents();
@@ -138,6 +142,7 @@ export function App() {
             onSetRenaming={s.setRenaming}
             accounts={s.accounts}
             onOpenSettings={() => s.setAccountsOpen(true)}
+            usage={s.usage}
           />
         ) : null}
         {active ? (

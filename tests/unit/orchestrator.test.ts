@@ -45,6 +45,7 @@ function stub(id: AgentId) {
     listModels: async () => [],
     listCommands: async () => [],
     readUsage: async () => null,
+    onUsage: () => () => undefined,
     isRunning: (s) => running.has(s),
     close: async () => undefined,
     onEvent: (cb) => {

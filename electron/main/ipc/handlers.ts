@@ -21,6 +21,7 @@ import {
   removeWorktree,
 } from '../services/git';
 import type { PtyManager } from '../services/pty';
+import type { UsageService } from '../services/usage';
 import type { Handlers } from './router';
 import { SettingsSchema } from '../../../shared/ipc';
 
@@ -49,6 +50,7 @@ export interface HandlerOptions {
   runningChildren?: (sessionId: string) => string[];
   pty?: PtyManager;
   browser?: BrowserPanel;
+  usage?: UsageService;
 }
 
 export function createHandlers(
@@ -365,6 +367,11 @@ export function createHandlers(
     'agent:approve': async ({ sessionId, requestId, decision }) => {
       await hub.approve(sessionId, requestId, decision);
       return null;
+    },
+
+    'usage:read': async ({ refresh }) => {
+      if (!options.usage) return { claude: null, codex: null };
+      return refresh ? options.usage.refresh() : options.usage.read();
     },
 
     'settings:get': () => SettingsSchema.parse(store.settings.all()),

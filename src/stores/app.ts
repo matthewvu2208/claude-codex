@@ -3,6 +3,7 @@ import { AGENT_IDS, type AgentId, type Permission } from '../../shared/agents';
 import type { AccountStatus, ModelInfo } from '../../shared/events';
 import type { AgentSettings } from '../components/common/AgentControls';
 import type { Folder, Session, SessionStatus } from '../../shared/models';
+import { UsageStateSchema, type UsageState } from '../../shared/usage';
 import { api } from '../lib/ipc';
 
 interface AppState {
@@ -20,6 +21,9 @@ interface AppState {
   accountsOpen: boolean;
   /** Model, effort and permission the Welcome screen starts each agent with. */
   welcome: Record<AgentId, AgentSettings>;
+  usage: UsageState;
+  loadUsage: (refresh: boolean) => Promise<void>;
+  setUsage: (raw: unknown) => void;
 
   load: () => Promise<void>;
   setWelcomeSettings: (agent: AgentId, patch: Partial<AgentSettings>) => void;
@@ -69,6 +73,18 @@ export const useApp = create<AppState>((set, get) => ({
   models: {},
   accountsOpen: false,
   welcome: WELCOME_DEFAULTS,
+  usage: { claude: null, codex: null },
+  loadUsage: async (refresh) => {
+    try {
+      set({ usage: await api.usage.read({ refresh }) });
+    } catch {
+      // Unknown usage shows as "—".
+    }
+  },
+  setUsage: (raw) => {
+    const parsed = UsageStateSchema.safeParse(raw);
+    if (parsed.success) set({ usage: parsed.data });
+  },
 
   setWelcomeSettings: (agent, patch) => {
     const welcome = { ...get().welcome, [agent]: { ...get().welcome[agent], ...patch } };

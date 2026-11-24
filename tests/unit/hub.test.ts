@@ -46,6 +46,7 @@ function stubAdapter() {
     listCommands: async () => [],
     listModels: async () => [],
     readUsage: async () => null,
+    onUsage: () => () => undefined,
     isRunning: () => running,
     close: async () => void calls.push('close'),
     onEvent: (cb) => {

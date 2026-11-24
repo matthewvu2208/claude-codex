@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AccountStatusSchema, ApprovalDecisionSchema, ModelInfoSchema } from './events';
+import { UsageStateSchema } from './usage';
 import {
   AgentIdSchema,
   FolderSchema,
@@ -224,6 +225,9 @@ export const ipcContract = {
     }),
     output: z.null(),
   },
+
+  /** Plan usage for the sidebar card; `refresh` asks the agents that can be polled. */
+  'usage:read': { input: z.object({ refresh: z.boolean() }), output: UsageStateSchema },
 
   'settings:get': { input: z.undefined(), output: SettingsSchema },
   'settings:set': { input: SettingsSchema, output: SettingsSchema },

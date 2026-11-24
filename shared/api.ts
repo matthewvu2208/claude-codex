@@ -70,6 +70,11 @@ export interface Api {
     /** Batches of events from main; validate with EventBatchSchema before use. */
     onEvent: (cb: (batch: unknown) => void) => () => void;
   };
+  readonly usage: {
+    read: Invoke<'usage:read'>;
+    /** Pushed when usage changes; validate with UsageStateSchema. */
+    onChange: (cb: (state: unknown) => void) => () => void;
+  };
   readonly settings: {
     get: Invoke<'settings:get'>;
     set: Invoke<'settings:set'>;

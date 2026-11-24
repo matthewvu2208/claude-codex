@@ -81,6 +81,10 @@ const api: Api = {
       return () => ipcRenderer.removeListener('agent:event', listener);
     },
   },
+  usage: {
+    read: invoke('usage:read'),
+    onChange: subscribe('usage:changed'),
+  },
   settings: {
     get: invoke('settings:get'),
     set: invoke('settings:set'),

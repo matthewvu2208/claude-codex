@@ -15,6 +15,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { Permission } from '../../../../shared/agents';
 import { HUB_TOOL_NAMES, HUB_TOOLS } from '../../../../shared/hubTools';
+import { claudeWindowLabel, toMs, utilizationPercent } from '../../../../shared/usage';
 import type {
   AccountStatus,
   AgentEvent,
@@ -119,6 +120,7 @@ export class ClaudeAdapter implements AgentAdapter {
   private readonly queryFn: QueryFn;
   private readonly binary: string | null;
   private lastRateLimit: UsageSnapshot | null = null;
+  private readonly usageListeners = new Set<(u: UsageSnapshot, raw: unknown) => void>();
   private modelsCache: ModelInfo[] | null = null;
 
   constructor(private readonly deps: ClaudeAdapterDeps = {}) {
@@ -257,6 +259,11 @@ export class ClaudeAdapter implements AgentAdapter {
     return this.lastRateLimit;
   }
 
+  onUsage(cb: (u: UsageSnapshot, raw: unknown) => void): () => void {
+    this.usageListeners.add(cb);
+    return () => this.usageListeners.delete(cb);
+  }
+
   isRunning(sessionId: string): boolean {
     return !!this.live.get(sessionId)?.activeTurn;
   }
@@ -359,14 +366,13 @@ export class ClaudeAdapter implements AgentAdapter {
       const info = msg.rate_limit_info;
       this.lastRateLimit = {
         agent: 'claude',
-        percent:
-          typeof info.utilization === 'number'
-            ? Math.round(info.utilization * (info.utilization <= 1 ? 100 : 1))
-            : null,
-        window: info.rateLimitType ?? null,
-        resetsAt: info.resetsAt ?? null,
+        percent: utilizationPercent(info.utilization),
+        window: claudeWindowLabel(info.rateLimitType),
+        resetsAt: toMs(info.resetsAt),
         status: info.status,
+        updatedAt: Date.now(),
       };
+      for (const cb of this.usageListeners) cb(this.lastRateLimit, info);
       if (info.status === 'rejected' && info.errorCode === 'credits_required') {
         this.emit({
           t: 'error',

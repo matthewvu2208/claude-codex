@@ -2,7 +2,7 @@ import { Contrast, Plus, Search, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { AGENT_IDS, AGENT_LABELS, type AgentId } from '../../../shared/agents';
 import type { AccountStatus } from '../../../shared/events';
-import { fixtureUsage } from '../../fixtures/sidebar';
+import type { UsageState } from '../../../shared/usage';
 import { shortcut } from '../../lib/platform';
 import { AgentIcon } from '../common/AgentIcon';
 import { Kbd } from '../common/Kbd';
@@ -20,6 +20,7 @@ interface SidebarProps {
   onSetRenaming?: (id: string | null) => void;
   accounts?: Partial<Record<AgentId, AccountStatus>>;
   onOpenSettings?: () => void;
+  usage?: UsageState;
 }
 
 const footerButton =
@@ -36,6 +37,7 @@ export function Sidebar({
   onSetRenaming,
   accounts = {},
   onOpenSettings,
+  usage = { claude: null, codex: null },
 }: SidebarProps) {
   const signedIn = AGENT_IDS.flatMap((agent) => {
     const a = accounts[agent];
@@ -90,7 +92,7 @@ export function Sidebar({
         />
       )}
 
-      <UsageCard usage={fixtureUsage} />
+      <UsageCard usage={usage} />
 
       <div className="flex flex-none items-center gap-2 px-1">
         {signedIn.map((a) => (
