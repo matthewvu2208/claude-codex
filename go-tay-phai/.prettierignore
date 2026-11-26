@@ -1,0 +1,6 @@
+dist
+node_modules
+package-lock.json
+scripts/.cache
+src/data/words
+PLAN.md
